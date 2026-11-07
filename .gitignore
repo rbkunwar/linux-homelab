@@ -1,0 +1,8 @@
+# The book is copyrighted: keep it local only
+*.pdf
+
+# Never commit keys or secrets
+*.key
+id_*
+*_vm
+.env
