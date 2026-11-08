@@ -16,7 +16,7 @@ Book p.1 (PDF p.27) · Priority: Core
 
 - [x] 1.1 Levels and Layers of Abstraction in a Linux System
 - [x] 1.2 Hardware: Understanding Main Memory
-- [ ] 1.3 The Kernel
+- [x] 1.3 The Kernel
 - [ ] 1.4 User Space
 - [ ] 1.5 Users
 - [ ] 1.6 Looking Forward
