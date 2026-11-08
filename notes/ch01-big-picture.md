@@ -224,6 +224,28 @@ Linux.pdf  README.md  dual-terminal.sh  notes  progress.md
 ```
 (On Linux, `fork()` is implemented by the `clone` syscall.)
 
+### My own strace run, explained line by line (2026-11-08)
+I ran `strace -f -e trace=clone,execve bash -c 'ls; true'` from my home folder:
+```
+execve("/usr/bin/bash", ["bash", "-c", "ls; true"], 0x...e0d8 /* 30 vars */) = 0
+clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLDstrace: Process 339112 attached
+, child_tidptr=0xffff923500f0) = 339112
+[pid 339112] execve("/usr/bin/ls", ["ls"], 0x...e940 /* 30 vars */) = 0
+Crypto  Desktop  Documents ... linux-project ... trend_paper
+[pid 339112] +++ exited with 0 +++
+```
+| Line | Meaning |
+|---|---|
+| `execve("/usr/bin/bash", [...]) = 0` | **exec**: bash is loaded and starts. `/* 30 vars */` = 30 environment variables passed in. `= 0` = success. |
+| `clone(... SIGCHLD ...) = 339112` | **fork**: bash copies itself. The kernel returns the child's PID, **339112**. `SIGCHLD` = "tell me (the parent) when the child finishes". |
+| `strace: Process 339112 attached` | strace's own message (from `-f`, follow children), printed in the middle of the clone line because both write at the same time. Not an error. |
+| `[pid 339112] execve("/usr/bin/ls", ["ls"], ...) = 0` | **exec**: the copy (PID 339112) **replaces itself with ls**. `["ls"]` = the argument list. |
+| `Crypto Desktop ...` | ls's normal output: the contents of my home folder. |
+| `+++ exited with 0 +++` | ls finished. **Exit code 0 = success** (non-zero = error). |
+
+- **Why `; true`?** With only one command (`bash -c 'ls'`), bash skips the fork and just **execs ls directly** (exec without fork). Adding a second command forces bash to fork for `ls`. `true` is a shell built-in, so it runs inside bash with no new process.
+- **Yellow `23:39 [5/299]` at the top right:** tmux **copy mode** (scrolling). I scrolled up with the mouse; `[5/299]` = 5 lines up out of 299 in the history. Press `q` to leave copy mode and get back to the prompt.
+
 **Exec without fork:**
 ```
 $ bash -c 'echo "my shell PID: $$"; ps -o pid,ppid,cmd'
