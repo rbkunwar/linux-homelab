@@ -14,8 +14,8 @@ Priority: **Core** = commonly needed on the job and asked in interviews. **Mediu
 ## Chapter 1: The Big Picture
 Book p.1 (PDF p.27) · Priority: Core
 
-- [ ] 1.1 Levels and Layers of Abstraction in a Linux System
-- [ ] 1.2 Hardware: Understanding Main Memory
+- [x] 1.1 Levels and Layers of Abstraction in a Linux System
+- [x] 1.2 Hardware: Understanding Main Memory
 - [ ] 1.3 The Kernel
 - [ ] 1.4 User Space
 - [ ] 1.5 Users
@@ -265,3 +265,4 @@ The book explains how Linux works but skips some day-to-day job skills. We'll co
 | Date | What we covered | Notes |
 |---|---|---|
 | 2026-11-07 | Set up tmux dual terminal, SSH key + config for the VM, added the book | Topics touched: apt, ssh-keygen, ~/.ssh/config, known_hosts fingerprints, tmux, df -h |
+| 2026-11-08 | Ch1 Lesson 1: abstraction, 3 layers, kernel vs user mode, kernel threads, main memory/state/image. Quiz passed | Notes: notes/ch01-big-picture.md. Learned: top/q/Ctrl-c, ps columns, paths (./ vs ~ vs /) |
