@@ -119,3 +119,134 @@ MiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   2562.2 avail Mem
 - **Kernel space vs user space:** "The kernel runs in kernel mode with unrestricted access to hardware and memory; programs run in user mode, isolated in their own memory, so a crashing program can't take down the system."
 - **"The site is slow":** "Break the system into layers, check each quickly (network, server resources, app, database), rule out the healthy ones, then dig into the guilty one."
 - **Pi is slow, what first?** CPU (`top`), memory (`free -h`), disk (`df -h`).
+
+---
+
+## Lesson 2: The kernel (section 1.3, PDF p.30–34)
+
+Almost everything the kernel does revolves around **main memory**. It splits memory up, gives each process its own share, and makes sure every process stays inside it.
+
+The kernel's **4 jobs**:
+
+| Job | In one line |
+|---|---|
+| **Processes** | decides which process gets to use the CPU |
+| **Memory** | tracks all memory: what belongs to which process, what's shared, what's free |
+| **Device drivers** | operates the hardware for processes |
+| **System calls and support** | the way processes ask the kernel to do things |
+
+### 1.3.1 Process management
+- Process management = **starting, pausing, resuming, scheduling, and terminating** processes.
+- One CPU core runs **one process at a time**. Each process gets a tiny **time slice**, then the next one runs. This switch is a **context switch**.
+- The slices are so short that it *looks* like everything runs at once: **multitasking**.
+- **When does the kernel run?** Between time slices, during a context switch.
+- The 7 steps of a context switch:
+  1. The CPU's **timer interrupts** the process, switches to **kernel mode**, and hands control to the kernel.
+  2. The kernel **saves the state** of the CPU and memory (so the process can resume later).
+  3. The kernel does any pending work (e.g. collecting I/O data).
+  4. The kernel **picks the next process** from those ready to run.
+  5. It prepares memory, then the CPU, for that process.
+  6. It tells the CPU **how long the new time slice lasts**.
+  7. It switches the CPU to **user mode** and hands control to the process.
+- With multiple CPUs (the Pi has 4 cores), several processes really do run at the same time, but the kernel still context-switches to keep all cores busy.
+
+**Real Pi output:**
+```
+$ grep ctxt /proc/stat
+ctxt 165576820                      ← context switches since boot (about 1 day)
+
+$ vmstat 1 3                        ← "cs" column = context switches per second
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa
+ 0  0      0 518088 143572 2139332    0    0     0     0 3773 4358  3  5 93  0
+```
+About 165 million switches in about 25 hours, roughly 1,800 per second, even when the Pi looks idle.
+
+### 1.3.2 Memory management
+The rules the kernel must enforce:
+- The kernel has its **own private memory** that processes can't access.
+- Each process gets **its own section** of memory.
+- One process **cannot read another's private memory**.
+- Processes **can share** memory (when allowed).
+- Some memory can be **read-only**.
+- The system can use **more memory than physically exists** by using **disk as extra memory** (swap).
+
+How: the CPU's **MMU (memory management unit)** enables **virtual memory**.
+- Each process acts **as if it had the whole machine to itself**.
+- When it touches memory, the MMU **translates** the process's address to the real physical address using a **memory address map** (its implementation is called a **page table**).
+- On each context switch, the kernel swaps in the next process's map.
+
+**Real Pi output:**
+```
+$ getconf PAGESIZE
+4096                                ← memory is managed in 4 KB "pages"
+$ swapon --show
+NAME      TYPE  SIZE USED PRIO
+/swapfile file 1024M   0B   -1     ← 1 GB of disk used as extra memory (unused right now)
+```
+
+### 1.3.3 Device drivers
+- Devices are normally only accessible in **kernel mode**, because bad access (e.g. a process switching off the power) could crash the machine.
+- Different devices that do the **same job** (two network cards) have **different programming interfaces**.
+- **Device drivers** live in the kernel and give programs **one uniform interface**, so software doesn't care which brand of hardware it's using.
+
+**Real Pi output:**
+```
+$ lsmod | wc -l
+93                                  ← about 92 kernel modules (drivers and features) loaded
+$ lsmod | head -3
+Module                  Size  Used by
+wireguard             102400  0
+libcurve25519          32768  1 wireguard
+```
+
+### 1.3.4 System calls and support
+- A **system call (syscall)** is a request from a process to the kernel to do something it can't do alone. Opening, reading, and writing files are all syscalls.
+- The two key syscalls for starting programs:
+  - **`fork()`**: the kernel makes a **nearly identical copy** of the process.
+  - **`exec(program)`**: the kernel **loads a new program, replacing** the current process.
+- Every new user process (except **init**, PID 1) starts via `fork()`. Usually `exec()` follows, to run a different program.
+- Typing `ls` in a shell: the **shell forks** a copy of itself, then **the copy execs `ls`**.
+
+```
+shell ──fork()──► shell + copy of shell ──exec(ls)──► shell + ls
+```
+
+- Syscalls are written with `()` because of how they look in C. `exec()` is really a family of calls (`execve` is the one you'll see). **Threads** are a variant of processes (Chapter 8).
+
+**Real Pi output: watching fork + exec with `strace`:**
+```
+$ strace -f -e trace=clone,execve bash -c 'ls; true'
+execve("/usr/bin/bash", ["bash", "-c", "ls; true"], ...) = 0     ← bash starts
+clone(...) = 336186                                               ← fork(): copy made, PID 336186
+[pid 336186] execve("/usr/bin/ls", ["ls"], ...) = 0              ← the copy becomes ls
+Linux.pdf  README.md  dual-terminal.sh  notes  progress.md
+[pid 336186] +++ exited with 0 +++                                ← ls finishes
+```
+(On Linux, `fork()` is implemented by the `clone` syscall.)
+
+**Exec without fork:**
+```
+$ bash -c 'echo "my shell PID: $$"; ps -o pid,ppid,cmd'
+my shell PID: 336187
+ 336187  336177 ps -o pid,ppid,cmd       ← same PID! bash exec'd into ps for its last command
+```
+
+**Pseudodevices:** they look like devices but are **pure software** inside the kernel.
+- `/dev/random` / `/dev/urandom`: random numbers (hard to do securely outside the kernel)
+- `/dev/null`: throws away everything written to it
+- `/dev/zero`: endless zeros
+
+Opening a pseudodevice is still a system call, so processes can't fully avoid syscalls.
+```
+$ head -c 16 /dev/urandom | base64
+L0rx7x4D2qsHt7PGTCdCkw==
+$ ls -l /dev/null /dev/random
+crw-rw-rw- 1 root root 1, 3 ... /dev/null      ← "c" = character device
+crw-rw-rw- 1 root root 1, 8 ... /dev/random
+```
+
+### Interview answers
+- **What happens when you type `ls`?** "The shell calls `fork()` to create a copy of itself, the child calls `exec()` to replace itself with `ls`, the kernel loads and runs `ls`, and when `ls` exits the shell gets notified (SIGCHLD) and shows the prompt again."
+- **What is a context switch?** "When the kernel stops one process at the end of its time slice, saves its state, and loads another process onto the CPU."
+- **What is virtual memory?** "Each process gets its own address space and thinks it owns all memory; the CPU's MMU translates those addresses to physical RAM using page tables, which isolates processes and allows swap."
+- **What is a system call?** "A request from a user-mode process to the kernel, e.g. open/read/write/fork/exec."
