@@ -266,3 +266,4 @@ The book explains how Linux works but skips some day-to-day job skills. We'll co
 |---|---|---|
 | 2026-11-07 | Set up tmux dual terminal, SSH key + config for the VM, added the book | Topics touched: apt, ssh-keygen, ~/.ssh/config, known_hosts fingerprints, tmux, df -h |
 | 2026-11-08 | Ch1 Lesson 1: abstraction, 3 layers, kernel vs user mode, kernel threads, main memory/state/image. Quiz passed | Notes: notes/ch01-big-picture.md. Learned: top/q/Ctrl-c, ps columns, paths (./ vs ~ vs /) |
+| 2026-11-08 | Ch1 Lesson 2: kernel jobs, context switch, virtual memory/MMU/page table, drivers, syscalls fork+exec (watched with strace), pseudodevices. Quiz passed | Fixed: Q4 (fork then exec, not what ls does); Q3 re-explained with the hotel |

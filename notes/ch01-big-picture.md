@@ -272,3 +272,7 @@ crw-rw-rw- 1 root root 1, 8 ... /dev/random
 - **What is a context switch?** "When the kernel stops one process at the end of its time slice, saves its state, and loads another process onto the CPU."
 - **What is virtual memory?** "Each process gets its own address space and thinks it owns all memory; the CPU's MMU translates those addresses to physical RAM using page tables, which isolates processes and allows swap."
 - **What is a system call?** "A request from a user-mode process to the kernel, e.g. open/read/write/fork/exec."
+
+### Lesson 2 quiz: what I got wrong at first
+- **"Which two syscalls start `ls`?"** I first described what ls *does* (lists folders). The question was how it *starts*: **fork() then exec()**, "copy, then become".
+- **Virtual memory, in my own words:** each program only has fake addresses, and the CPU (MMU) translates them into that program's own real memory, so programs **can't** touch each other's memory.
