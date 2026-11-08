@@ -50,6 +50,61 @@ Hardware                     ← CPU, RAM, disks, network ports
 
 Pi: about 199 processes, of which about 131 were kernel threads.
 
+### `top` explained (real output from my Pi, 2026-11-08)
+`top` is covered properly in Chapter 8. These are the basics.
+
+```
+top - 23:23:09 up 1 day,  1:32,  2 users,  load average: 0.94, 0.55, 0.51
+Tasks: 202 total,   2 running, 200 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  1.9 us,  1.9 sy,  0.0 ni, 92.3 id,  3.8 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :   3777.8 total,    522.4 free,   1215.6 used,   2229.0 buff/cache
+MiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   2562.2 avail Mem
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+  23874 rabindr+  20   0 6052472 326952 127948 R  41.7   8.5  15:14.50 2.1.284
+ 334732 rabindr+  20   0   12940   5428   3000 R  16.7   0.1   0:00.03 top
+     15 root      20   0       0      0      0 I   8.3   0.0   1:07.06 rcu_preempt
+   3130 netdata   20   0 1444336 128824  90832 S   8.3   3.3  17:56.74 go.d.plugin
+      1 root      20   0   27884  18616  10872 S   0.0   0.5   1:03.09 systemd
+      2 root      20   0       0      0      0 S   0.0   0.0   0:10.16 kthreadd
+```
+
+**Top half: the whole machine**
+- **Line 1:** `up 1 day, 1:32` is the uptime. `2 users` counts logged-in sessions. `load average: 0.94, 0.55, 0.51` is the load over the last 1/5/15 minutes.
+  - Rule of thumb: compare it to the number of cores (`nproc` = 4). Below 4 is fine; above 4 means work is queuing.
+- **Line 2, Tasks:** 202 processes. Most are **sleeping** (waiting for something to do), which is normal and healthy.
+- **Line 3, CPU %:**
+
+| Label | Meaning | Mine |
+|---|---|---|
+| `us` | user programs (user mode) | 1.9 |
+| `sy` | the kernel (kernel mode) | 1.9 |
+| `id` | idle | 92.3 |
+| `wa` | waiting for the disk (high = slow disk) | 3.8 |
+
+- **Lines 4–5, Memory:** `buff/cache` is spare RAM Linux uses to cache files; it's given back when programs need it.
+  - **`avail Mem` is the number that matters** (2562 MiB). Don't panic about a small `free`.
+  - **Swap** = disk used as extra RAM. `0.0 used` is good.
+
+**Bottom half: one line per process, sorted by CPU**
+
+| Column | Meaning |
+|---|---|
+| PID | process ID |
+| USER | owner |
+| S | state: R running, S sleeping, I idle kernel thread |
+| %CPU / %MEM | CPU / RAM used now |
+| TIME+ | total CPU time since start |
+| COMMAND | name |
+
+- `2.1.284` = Claude Code running on the Pi. `go.d.plugin` = netdata (a monitoring tool installed on the Pi).
+- `top` doesn't show `[brackets]` the way `ps` does, but `kthreadd` (PID 2) is still a kernel thread.
+- PR, NI, VIRT, RES, SHR: skip for now (Chapter 8).
+
+**Keys:** `q` quit · `M` sort by memory · `P` sort by CPU · `1` show each core · `h` help
+
+**Interview:** "How do you check whether a server is overloaded?" → `top`: compare the load average to the core count, check `%Cpu id`/`wa`, check `avail Mem` and swap usage, then see which process is at the top.
+
 ### Keys
 - `q`: quit screen programs (`top`, `less`, `man`)
 - `Ctrl-c`: stop almost any running command
