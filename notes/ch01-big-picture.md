@@ -409,6 +409,41 @@ close(3)                                = 0         ← "close file #3"    → "
 - **Groups** aren't just for sudo. Groups let several users **share access to files**. E.g. group `traders` gets read/write on folder `trade_box`. `sudo` is just one group that grants a special right (running commands as root).
 - **NetworkManager (Pi) vs systemd-networkd (VM):** same job, different programs. User space has **no strict rules**, so think in *jobs*, not program names, and check what a server actually uses.
 
+### Extra: the MMU and page tables in depth (2026-11-10)
+**Problem:** one block of RAM, about 200 programs, each needing private memory.
+**Answer:** programs only use **virtual (fake) addresses**; hardware translates every access.
+
+| Piece | What it is | Hotel |
+|---|---|---|
+| **Page** | memory chopped into **4096-byte (4 KB)** blocks | a room |
+| **Page table** | per-process list: virtual page → physical page | the guest's private room list at reception |
+| **MMU** | chip in the CPU that looks up the page table on **every** memory access, in hardware | the receptionist |
+
+```
+Program: "read 0x1000" (virtual) → MMU checks THIS process's page table → physical page in RAM → data
+```
+- A process can't name another process's memory: every address goes through its own table.
+- On a context switch the kernel gives the MMU the **next process's page table**.
+
+**Evidence from both nodes:**
+```
+page size: 4096 bytes                     ← Pi and VM
+
+Pi:  PageTables:  10328 kB                ← ~10 MB of RAM holds the translation tables
+VM:  PageTables:   7256 kB                ← ~7 MB   (grep PageTables /proc/meminfo)
+
+$ cat /proc/self/maps | head -1           ← what a program sees: virtual addresses
+Pi:  aaaaab9f0000-aaaaac2ac000 r-xp .../cat
+VM:  56c418c63000-56c418c65000 r--p /usr/bin/cat
+```
+- The hex ranges are **virtual** addresses, not real RAM positions.
+- `r-xp` = read + execute, **not writable**: the "some memory is read-only" rule, enforced by the page table.
+- Running `cat` twice gives different addresses (`aaaaab9f...` vs `aaaac13b...`): **ASLR** (address space layout randomisation) randomises them to hinder attackers.
+
+**Page fault:** if the page table says a page isn't in RAM (e.g. it's in swap), the MMU raises a **page fault** → kernel mode → the kernel loads the page, updates the table → the program continues without noticing. This is how Linux uses more memory than physically exists. Chapter 8.
+
+**Interview:** "Each process has its own virtual address space. Memory is split into pages (usually 4 KB); the kernel keeps a page table per process mapping virtual to physical pages, and the CPU's MMU translates on every access. This gives isolation, read-only pages, and swapping. A missing page triggers a page fault that the kernel handles."
+
 ---
 
 ## ⭐ Chapter 1 summary (one-page review)
