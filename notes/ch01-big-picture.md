@@ -355,3 +355,41 @@ uid=0(root) gid=0(root) groups=0(root) ← sudo = run one command as root
 - **What is root?** "The superuser, UID 0. It can access any file and control any process. It's still a user-mode process, though, not kernel mode. Use it only when needed, via sudo."
 - **What are users and groups for?** "Permissions and boundaries: every process runs as a user, every file has an owner and a group, and groups let several users share access."
 - **Why do services run as their own users** (`netdata`, `systemd-resolve`)? "Least privilege: if the service is hacked, the attacker only gets that user's limited rights, not root."
+
+---
+
+### Extra: what is a system call, explained again (2026-11-09)
+**A system call is a program asking the kernel to do something it isn't allowed to do itself.**
+
+Programs run in **user mode** (locked in their own box), so they **can't touch files, disks, the network, or other hardware directly**. They ask the kernel, which does it in **kernel mode** and hands back the result.
+
+🍽️ **Restaurant analogy:** you (the program) can't walk into the kitchen (the hardware). You give your order to the waiter (**system call**), the kitchen (**kernel**) makes it, and the waiter brings it back (**return value**).
+
+Common ones:
+
+| System call | Asks the kernel to... |
+|---|---|
+| `openat` | open a file |
+| `read` | read data from a file, network, or keyboard |
+| `write` | write data to a file or the screen |
+| `close` | close a file |
+| `fork` / `clone` | copy this process |
+| `execve` | replace this process with another program |
+
+**Real: what `cat /etc/hostname` asks the kernel (VM, GNU cat):**
+```
+openat(AT_FDCWD, "/etc/hostname", O_RDONLY) = 3     ← "open this file"   → kernel: "it's file #3"
+read(3, "bot-vnic\n", 131072)           = 9         ← "read file #3"     → kernel: "here are 9 bytes"
+write(1, "bot-vnic\n", 9)               = 9         ← "write to #1 (the screen)" → "9 bytes written"
+read(3, "", 131072)                     = 0         ← "read more"        → "0 = end of file"
+close(3)                                = 0         ← "close file #3"    → "done"
+```
+- The number after `=` is the kernel's **answer** (the return value). `-1` means an error.
+- Files are referred to by small numbers called **file descriptors**: `0` = keyboard input, `1` = screen output, `2` = error output, `3+` = files the program opened. (Chapter 2: standard input/output.)
+
+**Pi vs VM, same command but different system calls:**
+- VM: `cat (GNU coreutils) 9.4` uses the classic **read → write**.
+- Pi: `cat (uutils coreutils) 0.8.0` (Ubuntu 26.04 switched to a Rust rewrite) uses **`splice`**, which tells the kernel to copy straight from the file to the output without bringing the data into the program's memory. Faster, same result.
+- `strace -c cat /etc/hostname` counts every syscall: **138 on the Pi, 121 on the VM**, just to print one word. Most are the program starting up (loading libraries).
+
+**Interview:** "What is a system call?" → "The interface between user space and the kernel. User-mode programs can't access hardware directly, so they request services like open, read, write, fork and exec, and the CPU switches to kernel mode to perform them."
