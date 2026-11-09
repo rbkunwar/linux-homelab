@@ -393,3 +393,12 @@ close(3)                                = 0         ← "close file #3"    → "
 - `strace -c cat /etc/hostname` counts every syscall: **138 on the Pi, 121 on the VM**, just to print one word. Most are the program starting up (loading libraries).
 
 **Interview:** "What is a system call?" → "The interface between user space and the kernel. User-mode programs can't access hardware directly, so they request services like open, read, write, fork and exec, and the CPU switches to kernel mode to perform them."
+
+### Lesson learned: always read the prompt (2026-11-09)
+- I ran `sudo reboot` on the VM. Rebooting cuts every SSH connection, so the bottom tmux pane fell back to a **Pi** shell (by design: `VM connection closed. Type: ssh vm`).
+- The pane label still said "Ubuntu VM", but I was on the Pi. **The label can be wrong; the prompt never lies:**
+  - `rabindrakunwar@rabindrakunwar:~$` = Pi
+  - `ubuntu@bot-vnic:~$` = VM
+- Reconnect with `ssh vm`.
+- Real-world version: running `sudo reboot` (or `rm`) on the **wrong server** is a classic production incident. Check the prompt (or run `hostname`) before any risky command.
+- The reboot did clear the VM's `*** System restart required ***` (pending kernel updates are only used after a reboot).
