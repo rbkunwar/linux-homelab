@@ -408,3 +408,31 @@ close(3)                                = 0         ← "close file #3"    → "
   - Fine point: least privilege doesn't stop a hack from happening. It **limits the damage** when one does.
 - **Groups** aren't just for sudo. Groups let several users **share access to files**. E.g. group `traders` gets read/write on folder `trade_box`. `sudo` is just one group that grants a special right (running commands as root).
 - **NetworkManager (Pi) vs systemd-networkd (VM):** same job, different programs. User space has **no strict rules**, so think in *jobs*, not program names, and check what a server actually uses.
+
+---
+
+## ⭐ Chapter 1 summary (one-page review)
+
+**Abstraction:** ignore inner details; focus on what a component does and how to use it. Troubleshoot by splitting a system into parts and ruling them out one by one.
+
+**3 levels:** Hardware (CPU, RAM, disks, network) → Kernel (the manager) → User processes (user space).
+
+| Kernel mode | User mode |
+|---|---|
+| the kernel; unrestricted access | every process, **including root's**; restricted to its own memory |
+| a crash can kill the system | a crash kills only that process |
+
+**Memory:** everything (kernel, processes, I/O) lives in and flows through RAM. State = an arrangement of bits; image = the physical bits.
+
+**The kernel's 4 jobs:**
+1. **Processes:** time slices + **context switches** (the kernel runs *between* slices) = multitasking.
+2. **Memory:** **virtual memory**. Each process sees fake addresses; the **MMU** translates them using **page tables**. Processes are isolated; swap = disk as extra RAM.
+3. **Device drivers:** operate hardware in kernel mode and give programs one uniform interface.
+4. **System calls:** how programs ask the kernel for things (`open`, `read`, `write`, ...). New programs start with **fork() → exec()** ("copy, then become"). **Pseudodevices** (`/dev/null`, `/dev/urandom`) are kernel software that looks like devices.
+
+**User space:** layered loosely (bottom: small helpers such as logging and network config; middle: services; top: apps), but **no strict rules**. Same job, different programs (NetworkManager vs systemd-networkd).
+
+**Users:** the kernel knows **UIDs**, not names. Every process has an owner. **root = UID 0**, all-powerful but still **user mode**. **Groups** = shared file access. Services run as their own users → **least privilege** limits the damage if hacked.
+
+**Tools met:** `uname -r/-m`, `nproc`, `free -h`, `df -h`, `top`, `ps -ef`, `vmstat 1`, `strace`, `lsmod`, `id`, `sudo id`, `getent passwd`, `systemctl is-active`.
+**Habits:** read the prompt before risky commands; `q` quits, `Ctrl-c` stops.
