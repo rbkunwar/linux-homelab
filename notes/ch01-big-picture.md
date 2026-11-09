@@ -402,3 +402,9 @@ close(3)                                = 0         ← "close file #3"    → "
 - Reconnect with `ssh vm`.
 - Real-world version: running `sudo reboot` (or `rm`) on the **wrong server** is a classic production incident. Check the prompt (or run `hostname`) before any risky command.
 - The reboot did clear the VM's `*** System restart required ***` (pending kernel updates are only used after a reboot).
+
+### Lesson 3 quiz: what I got wrong at first
+- **Why do services run as their own user?** At first I said "because it runs in user mode". Wrong: *all* processes, root's included, run in user mode. The real reason is **permissions / least privilege**: if `netdata` gets hacked, the attacker only gets the `netdata` user's small set of rights, not root's.
+  - Fine point: least privilege doesn't stop a hack from happening. It **limits the damage** when one does.
+- **Groups** aren't just for sudo. Groups let several users **share access to files**. E.g. group `traders` gets read/write on folder `trade_box`. `sudo` is just one group that grants a special right (running commands as root).
+- **NetworkManager (Pi) vs systemd-networkd (VM):** same job, different programs. User space has **no strict rules**, so think in *jobs*, not program names, and check what a server actually uses.

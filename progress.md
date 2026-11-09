@@ -17,9 +17,9 @@ Book p.1 (PDF p.27) · Priority: Core
 - [x] 1.1 Levels and Layers of Abstraction in a Linux System
 - [x] 1.2 Hardware: Understanding Main Memory
 - [x] 1.3 The Kernel
-- [ ] 1.4 User Space
-- [ ] 1.5 Users
-- [ ] 1.6 Looking Forward
+- [x] 1.4 User Space
+- [x] 1.5 Users
+- [x] 1.6 Looking Forward
 
 ## Chapter 2: Basic Commands and Directory Hierarchy
 Book p.11 (PDF p.37) · Priority: Core
@@ -267,3 +267,4 @@ The book explains how Linux works but skips some day-to-day job skills. We'll co
 | 2026-11-07 | Set up tmux dual terminal, SSH key + config for the VM, added the book | Topics touched: apt, ssh-keygen, ~/.ssh/config, known_hosts fingerprints, tmux, df -h |
 | 2026-11-08 | Ch1 Lesson 1: abstraction, 3 layers, kernel vs user mode, kernel threads, main memory/state/image. Quiz passed | Notes: notes/ch01-big-picture.md. Learned: top/q/Ctrl-c, ps columns, paths (./ vs ~ vs /) |
 | 2026-11-08 | Ch1 Lesson 2: kernel jobs, context switch, virtual memory/MMU/page table, drivers, syscalls fork+exec (watched with strace), pseudodevices. Quiz passed | Fixed: Q4 (fork then exec, not what ls does); Q3 re-explained with the hotel |
+| 2026-11-09 | Ch1 Lesson 3: user space layers (Figure 1-3 on Pi vs VM), users/UIDs, root (UID 0, still user mode), groups, least privilege; system calls re-explained with cat traces. Quiz passed | Fixed: Q3 least privilege limits damage (not about user mode); Q4 groups = shared file access. Learned: always read the prompt (rebooted VM dropped SSH) |
