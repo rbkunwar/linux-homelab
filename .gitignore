@@ -6,3 +6,6 @@
 id_*
 *_vm
 .env
+
+# Separate repo: github.com/rbkunwar/trading-infra-lab
+trading-infra-lab/

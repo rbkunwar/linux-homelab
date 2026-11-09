@@ -25,6 +25,10 @@ Every section follows the same loop: **Learn → Lab → Check → Interview ang
 
 Progress checklist and session log: **[progress.md](progress.md)**
 
+## Project
+
+What I build with each chapter lives in its own repo: **[trading-infra-lab](https://github.com/rbkunwar/trading-infra-lab)**, a two-node trading-style infrastructure lab (hardening, time sync, low-latency tuning, monitoring, automation, incident postmortems).
+
 ## Repo layout
 
 ```
