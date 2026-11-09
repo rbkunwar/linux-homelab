@@ -276,3 +276,82 @@ crw-rw-rw- 1 root root 1, 8 ... /dev/random
 ### Lesson 2 quiz: what I got wrong at first
 - **"Which two syscalls start `ls`?"** I first described what ls *does* (lists folders). The question was how it *starts*: **fork() then exec()**, "copy, then become".
 - **Virtual memory, in my own words:** each program only has fake addresses, and the CPU (MMU) translates them into that program's own real memory, so programs **can't** touch each other's memory.
+
+---
+
+## Lesson 3: User space, users, looking forward (sections 1.4–1.6, PDF p.34–36)
+*Labs run on both machines: Pi (top pane) and VM (bottom pane).*
+
+### 1.4 User space
+- **User space** = the memory the kernel gives to user processes. It also means the **whole collection of running processes**. Informal name: **userland**.
+- A process is just a **state (image) in memory**.
+- **Most of the real action on a Linux system happens in user space.**
+- To the kernel, all processes are **equal**. To us, they do different jobs, arranged roughly in **layers** (Figure 1-3):
+
+```
+TOP     │ User Interface        Web Browser                ← apps people use directly
+MIDDLE  │ Name Caching Server   (also: mail, print, database services)
+BOTTOM  │ Network Configuration  Communication Bus  Diagnostic Logging   ← small, single-job services
+```
+- Bottom = small components doing **one simple job**. Middle = bigger services. Top = complicated things the **user controls directly**.
+- A component usually uses others **at the same level or below**.
+- **But there are no strict rules in user space.** Example: most programs log through the standard **syslog** service, but some do their own logging. Web and database servers could be "top" (complex) or "middle" (apps depend on them).
+
+**Figure 1-3 on my real machines** (`systemctl is-active <name>`):
+
+| Figure 1-3 component | Pi | VM | Program |
+|---|---|---|---|
+| Name caching server | active | active | `systemd-resolved` |
+| Network configuration | active | active | Pi: `NetworkManager` · VM: `systemd-networkd` (**different tools, same job**) |
+| Communication bus | active | active | `dbus` |
+| Diagnostic logging | active | active | `rsyslog` (syslog) + `systemd-journald` |
+| Running services in total | 29 | 23 | `systemctl list-units --type=service --state=running` |
+
+### 1.5 Users
+- A **user** = something that can **run processes and own files**.
+- The kernel doesn't know usernames. It only knows **numbers: user IDs (UIDs)**. Names to numbers is covered in Chapter 7.
+- Users exist for **permissions and boundaries**:
+  - Every process has an **owner** and "runs as" that user.
+  - A user can stop or modify **their own** processes, but **not other users'**.
+  - Users own files and choose whether to share them.
+- Systems have many **non-human (system) users** too, e.g. `daemon`, `bin`, `mail`, `netdata`, `_chrony`, `systemd-resolve`. Services run as them so they're boxed in.
+- **root** (UID **0**) = the **superuser**: can kill or alter **any** process and access **any** file. Someone with root access = an **administrator**.
+- ⚠️ Root is dangerous: the system lets root do anything, even harmful things. Designers try to make root unnecessary where possible (e.g. switching Wi-Fi without root).
+- 🎯 **Trick question:** root still runs in **user mode**, not kernel mode. Root is all-powerful *among users*, but it's still a user process asking the kernel via system calls.
+- **Groups** = sets of users. Their main purpose is **sharing file access** among members.
+
+**Real output from both machines:**
+```
+Pi $ id
+uid=1000(rabindrakunwar) gid=1000(rabindrakunwar) groups=1000(rabindrakunwar),4(adm),24(cdrom),27(sudo),...
+VM $ id
+uid=1001(ubuntu) gid=1001(ubuntu) groups=1001(ubuntu),4(adm),...,27(sudo),...,120(lxd)
+
+both $ getent passwd root
+root:x:0:0:root:/root:/bin/bash        ← UID 0 = root, on every Linux system
+
+both $ sudo id
+uid=0(root) gid=0(root) groups=0(root) ← sudo = run one command as root
+```
+- Being in group **`sudo`** (27) is what lets me run commands as root.
+- My UID is 1000 on the Pi but 1001 on the VM: **UIDs are per machine**. Human users usually start at 1000; system users are below 1000.
+
+| | Pi | VM |
+|---|---|---|
+| Users in total (`getent passwd \| wc -l`) | 50 | 43 |
+| Human users (UID ≥ 1000) | `rabindrakunwar` | `opc`, `ubuntu`, `rabin`, `adminrabin` |
+| Processes owned by root | 153 | 104 |
+| Processes owned by me | 26 | 10 |
+| Processes owned by `netdata` | 14 | 15 |
+
+(`opc` is the default user Oracle Cloud creates.) Most processes run as **root** or as **system users**, not as humans.
+
+### 1.6 Looking forward
+- User processes = the environment we interact with. The kernel manages processes and hardware. Both live in memory.
+- You can't learn Linux by reading alone; you need to get your hands dirty.
+- Chapter 2 covers user-space basics and **long-term storage** (disks, files), which Chapter 1 skipped.
+
+### Interview answers
+- **What is root?** "The superuser, UID 0. It can access any file and control any process. It's still a user-mode process, though, not kernel mode. Use it only when needed, via sudo."
+- **What are users and groups for?** "Permissions and boundaries: every process runs as a user, every file has an owner and a group, and groups let several users share access."
+- **Why do services run as their own users** (`netdata`, `systemd-resolve`)? "Least privilege: if the service is hacked, the attacker only gets that user's limited rights, not root."
