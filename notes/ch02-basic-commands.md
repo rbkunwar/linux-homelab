@@ -293,3 +293,62 @@ $ find /etc -name '*.service' 2>/dev/null | wc -l   → Pi 100, VM 80
 - **Who expands `*`?** "The shell, before the command runs. The command only sees the list of filenames, which is why you quote patterns for `find` and `grep`."
 - **How do you find failed SSH logins?** `grep -E 'Failed password|Invalid user' /var/log/auth.log` (or `journalctl -u ssh`), then count by user/IP with `sort | uniq -c | sort -rn`.
 - **How do you watch a log live?** `tail -f /var/log/syslog`.
+
+### grep नेपालीमा (grep explained in Nepali)
+**grep = फाइलभित्र शब्द खोज्ने command।** Browser मा **Ctrl + F** जस्तै। grep ले हरेक line पढ्छ र खोजेको शब्द भएका line मात्र देखाउँछ। 🌾 **छलनी (sieve)** जस्तै: मिलेका line मात्र तल झर्छन्।
+
+```
+grep   [option]   शब्द      फाइल
+grep              root      /etc/passwd     → /etc/passwd मा "root" भएका line
+```
+⚠️ grep ले शब्द जहाँ भए पनि भेट्छ (`chroot` भित्रको `root` पनि)।
+
+| Option | के गर्छ | सम्झने तरिका |
+|---|---|---|
+| `-v` | शब्द **नभएका** line (उल्टो) | re**v**erse |
+| `-c` | **गन्ती** मात्र | **c**ount |
+| `-i` | ठूलो/सानो अक्षर फरक नपर्ने | **i**gnore case |
+| `-w` | **पूरा शब्द** मात्र | **w**ord |
+
+```
+grep -c nologin /etc/passwd      → 42  (login गर्न नमिल्ने system users)
+grep -vc nologin /etc/passwd     → 8   (login गर्न मिल्ने: root, rabindrakunwar ...)
+42 + 8 = 50 = जम्मा users (getent passwd | wc -l)
+```
+
+काममा: `grep -i error /var/log/syslog` (error खोज्न) · `grep -c "Invalid user" /var/log/auth.log` (hack प्रयास गन्न) · `ps -ef | grep ssh` (अर्को command को output भित्र खोज्न)
+
+> **एक लाइनमा:** grep = फाइल वा output भित्र शब्द खोजेर, त्यो शब्द भएका line मात्र देखाउने command। `-v` उल्टो, `-c` गन्ती, `-i` ठूलो-सानो अक्षर बिर्सन्छ।
+
+### Lesson 2 quiz: what I got wrong at first
+- **Who expands `*.txt`?** I said `ls`. Wrong: the **shell** expands it **before** running the command; `ls` only receives the filenames. That's why patterns for `find`/`grep` go in quotes.
+- **Lines without a word:** `grep -v word file`. My first retry `grep -v error /etc.passwd` had two mistakes: the wrong word, and `/etc.passwd` (dot) instead of `/etc/passwd` (slash). Every character counts; use Tab completion.
+- `cd..` (no space) → `bash: cd..: command not found`. Must be **`cd ..`**: command, space, argument.
+
+### My grep practice output, explained (नेपालीमा)
+**1. `grep -i BASH /etc/passwd`**
+```
+root:x:0:0:root:/root:/bin/bash
+rabindrakunwar:x:1000:1000:Rabindra Kunwar:/home/rabindrakunwar:/bin/bash
+```
+- `BASH` (ठूलो) खोज्दा `bash` (सानो) भेटियो, `-i` ले गर्दा। `-i` बिना केही आउँदैनथ्यो।
+- `/etc/passwd` को ७ भाग: `username : x : UID : GID : पूरा नाम : home folder : shell`
+- यसको अर्थ: bash shell भएका (login गर्न मिल्ने) user दुई जना: `root` र म।
+- रातो रङ: `grep is aliased to 'grep --color=auto'` (`type grep`)
+
+**2. `ps -ef | grep tmux`**: `|` (pipe) ले `ps` को output `grep` लाई दिन्छ।
+```
+UID       PID     PPID  STIME  TTY    CMD
+rabindr+  35840      1  Nov07  ?      tmux new-session -d -s linux -n main   ← tmux SERVER
+rabindr+  868829 868827 22:39  pts/1  tmux attach-session -t linux          ← tmux CLIENT
+rabindr+  881496  35841 23:44  pts/2  grep --color=auto tmux                ← grep आफैं!
+```
+- **Server** (PPID 1 = systemd, TTY `?` = कुनै terminal छैन): Nov 7 देखि चलिरहेको। Connection टुटे पनि session यसैले जोगाउँछ। 📺 TV station।
+- **Client** (parent = `bash ./dual-terminal.sh`): मैले हेरिरहेको झ्याल। 📺 TV। बन्द गरे पनि station चलिरहन्छ; `attach` ले फेरि जोड्छ।
+- **grep आफैं**: grep को command मा पनि "tmux" छ, त्यसैले आफैंलाई भेट्यो 🪞। Parent 35841 = Pi pane को bash।
+
+Process family (fork, Chapter 1):
+```
+systemd (1) └─ tmux server (35840) └─ bash, Pi pane (35841) └─ grep tmux (881496)
+```
+grep ले आफैंलाई नभेटोस्: `pgrep -a tmux` वा `ps -ef | grep [t]mux` (`[t]mux` pattern ले "tmux" मिलाउँछ, तर grep को आफ्नै command line मा "[t]mux" छ, "tmux" छैन)। Interview trick!
