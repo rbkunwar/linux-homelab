@@ -352,3 +352,204 @@ Process family (fork, Chapter 1):
 systemd (1) └─ tmux server (35840) └─ bash, Pi pane (35841) └─ grep tmux (881496)
 ```
 grep ले आफैंलाई नभेटोस्: `pgrep -a tmux` वा `ps -ef | grep [t]mux` (`[t]mux` pattern ले "tmux" मिलाउँछ, तर grep को आफ्नै command line मा "[t]mux" छ, "tmux" छैन)। Interview trick!
+
+### Q: What is a GID? (2026-11-10)
+**GID = Group ID**, the number of a group. Like UIDs, the kernel uses numbers, not names.
+
+```
+rabindrakunwar:x:1000:1000:Rabindra Kunwar:/home/rabindrakunwar:/bin/bash
+                     UID  GID ← primary group (4th field of /etc/passwd)
+```
+UID 1000 and GID 1000 are different things with the same number: Ubuntu creates a **private group with the same name** for each user.
+
+```
+$ id      (Pi)
+uid=1000(rabindrakunwar) gid=1000(rabindrakunwar) groups=1000(rabindrakunwar),4(adm),24(cdrom),27(sudo),...
+```
+| | Meaning | Mine |
+|---|---|---|
+| **Primary group** (`gid=`) | new files I create get this group | `rabindrakunwar` (1000) |
+| **Supplementary groups** (`groups=`) | extra access through membership | `adm` (4), `sudo` (27), ... |
+
+Groups are defined in **`/etc/group`** (`name:x:GID:members`):
+```
+sudo:x:27:rabindrakunwar          (Pi)
+sudo:x:27:ubuntu,adminrabin       (VM: two accounts can become root)
+adm:x:4:syslog,rabindrakunwar
+```
+
+**Why I can read the login log without sudo:**
+```
+-rw-r----- 1 syslog adm 381667 Nov 10 23:30 /var/log/auth.log
+```
+Group = `adm`, the group may read (`r--`), and I'm in `adm` → allowed. Others get "Permission denied".
+
+**GIDs are per machine:** `netdata` is GID 972 on the Pi but 997 on the VM. This matters when copying files between servers (Chapter 12).
+
+🇳🇵 GID = group को नम्बर। नयाँ फाइल primary group (1000) को हुन्छ; `adm`, `sudo` जस्ता group मा भएकाले थप अधिकार पाइन्छ।
+
+**Interview:** "A GID is a group's numeric ID. Each user has a primary group (in /etc/passwd) that new files inherit, plus supplementary groups (in /etc/group). Files have separate group permissions, so group membership is how access is shared, e.g. `adm` for logs, `sudo` for admin."
+
+---
+
+## Lesson 3: Shell environment, editors, help (2.6–2.13, PDF p.48–54)
+
+### 2.6 Changing your password and shell
+- `passwd` changes your password (old one once, new one twice).
+- Best passwords are **long nonsense sentences**, 16+ characters. Length beats strange symbols.
+- `chsh` changes your login shell (zsh, ksh, tcsh). The book assumes bash.
+
+### 2.7 Dot files
+- Files/dirs starting with `.` are **hidden**: `ls` skips them, `ls -a` shows them. Examples: `.bashrc`, `.profile`, `.ssh`.
+- Nothing special about them: they're hidden just to keep `ls` tidy. Mostly **configuration**.
+- Globs like `*` don't match dot files. Use `.*` explicitly.
+```
+            ls     ls -a
+Pi home:    20     38       ← 18 hidden entries
+VM home:    11     24
+```
+⚠️ **Book vs reality:** the book warns that `.*` also matches `.` and `..` (dangerous with `rm -r .*`). **bash 5.2+ has `globskipdots` on by default**, so `.*` no longer matches `.`/`..`. Both machines: Pi bash 5.3.9, VM bash 5.2.21, `globskipdots on`. Still never run `rm -r .*`: older systems behave the book's way.
+
+### 2.8 Shell variables vs environment variables
+- **Shell variable:** `STUFF=blah` (⚠️ **no spaces around `=`**). Read it with `$STUFF`. It lives only in this shell.
+- **Environment variable:** a shell variable made **exportable**: `export STUFF`. Passed to **every program the shell starts** (child processes inherit the environment: fork + exec).
+- Programs read env vars for configuration (e.g. `LESS` for less's options; man pages have an ENVIRONMENT section).
+- `PS1` is a shell variable that controls the prompt.
+
+**Real test, same result on both machines:**
+```
+$ STUFF=blah
+$ echo "[$STUFF]"                  → [blah]    the shell sees it
+$ bash -c 'echo "[$STUFF]"'        → []        a child process does NOT
+$ export STUFF
+$ bash -c 'echo "[$STUFF]"'        → [blah]    after export, the child inherits it
+```
+```
+$ env | wc -l                      → Pi 60, VM 18   (number of environment variables)
+HOME=/home/rabindrakunwar · USER=rabindrakunwar · SHELL=/bin/bash · LANG=en_US.UTF-8   (Pi)
+HOME=/home/ubuntu · USER=ubuntu · SHELL=/bin/bash · LANG=C.UTF-8                     (VM)
+```
+**The prompt decoded:** `PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '`
+→ `\u` user · `@` · `\h` host · `:` · `\w` working dir · `\$` = `$` (or `#` when root). So `rabindrakunwar@rabindrakunwar:~$`.
+
+### 2.9 The command PATH
+- `PATH` = env var listing the directories the shell searches for commands, **separated by `:`**, searched **left to right**. The **first match wins**.
+```
+$ echo $PATH | tr ':' '\n'         ← identical on both machines
+/usr/local/sbin
+/usr/local/bin
+/usr/sbin
+/usr/bin
+/sbin
+/bin
+/usr/games
+/usr/local/games
+/snap/bin
+$ type -a ls
+ls is /usr/bin/ls                  ← found first, this one runs
+ls is /bin/ls                      ← same file (/bin → /usr/bin symlink)
+```
+- Add a dir **first**: `PATH=dir:$PATH` · **last**: `PATH=$PATH:dir`
+- Mistyped `$PATH` and broke it? Just open a new terminal. It's only temporary until saved in a config file.
+- 🔐 Security: never put `.` (current dir) early in PATH. A malicious `ls` in a folder could run instead of the real one.
+
+### 2.10 Special characters (Table 2-1)
+| Char | Name | Uses |
+|---|---|---|
+| `*` | star, asterisk | regex, glob |
+| `.` | dot | current dir, file/hostname separator |
+| `!` | bang | negation, command history |
+| `\|` | pipe | command pipes |
+| `/` | (forward) slash | directory separator, search |
+| `\` | backslash | literals, macros (never directories) |
+| `$` | dollar | variables, end of line |
+| `'` | tick, single quote | literal strings |
+| `` ` `` | backtick | command substitution |
+| `"` | double quote | semi-literal strings |
+| `^` | caret | negation, beginning of line |
+| `~` | tilde, squiggle | negation, home dir shortcut |
+| `#` | hash, sharp, pound | comments, substitutions |
+| `[ ]` | (square) brackets | ranges |
+| `{ }` | braces, curly brackets | statement blocks, ranges |
+| `_` | underscore | substitute for a space |
+
+Control keys are written with a caret: `^C` = Ctrl-C.
+
+### 2.11 Command-line editing (Table 2-2)
+| Keys | Action |
+|---|---|
+| `Ctrl-B` / `Ctrl-F` | cursor left / right |
+| `Ctrl-P` / `Ctrl-N` | previous / next command (history) |
+| `Ctrl-A` / `Ctrl-E` | start / end of line |
+| `Ctrl-W` | erase previous word |
+| `Ctrl-U` | erase cursor → start of line |
+| `Ctrl-K` | erase cursor → end of line |
+| `Ctrl-Y` | paste what was erased |
+
+These same keys work in many Unix programs, so learn them instead of the arrow keys. Plus **Tab** = autocomplete (already using it), `Ctrl-R` = search history (bonus).
+
+### 2.12 Text editors
+- Most config is plain text (`/etc`), so you **must** be able to edit files without damaging them.
+- The two standards: **vi** (fast, "plays like a video game") and **Emacs** (does everything, lots of help).
+- The book warns against getting stuck on beginner editors like **nano**. vi exists on almost every server, so learn it.
+- Terminal editors (vi) use the terminal's I/O; GUI editors open their own window.
+
+| Editor | Pi | VM |
+|---|---|---|
+| `vi` | ✅ (VIM 9.1) | ✅ |
+| `vim` | – | ✅ |
+| `nano` | ✅ | ✅ |
+| `emacs` | – | – |
+
+**vi survival kit:**
+| Do | Keys |
+|---|---|
+| open | `vi file` |
+| start typing (Insert mode) | `i` |
+| stop typing (back to Normal mode) | `Esc` |
+| save + quit | `:wq` + Enter |
+| quit **without** saving | `:q!` + Enter |
+| delete line / undo | `dd` / `u` |
+| search | `/word`, then `n` |
+
+vi has **modes**: Normal (keys are commands) and Insert (keys type text). Lost? Press `Esc`.
+
+### 2.13 Getting online help
+- `man ls` = the manual page. Reference, not a tutorial. Navigate like `less` (`/search`, `q`).
+- `man -k keyword` = search for pages by keyword (when you don't know the command name).
+- **Manual sections:**
+
+| Section | Contents |
+|---|---|
+| 1 | user commands |
+| 2 | kernel system calls |
+| 3 | programming library |
+| 4 | devices / drivers |
+| 5 | **file formats** (config files) |
+| 6 | games |
+| 7 | conventions, encodings |
+| 8 | **system/admin commands** and servers |
+
+- Written like `ping(8)`. Same name in several sections → `man 5 passwd` (the **file** `/etc/passwd`) vs `man passwd` (the **command**, section 1).
+- Also: `command --help` / `-h`, `info command`, and `/usr/share/doc/` (Pi: 2,349 entries, VM: 1,560).
+```
+$ man -w ls        Pi: /usr/share/man/man1/rust-ls.1.gz   ← the Rust ls again
+                   VM: /usr/share/man/man1/ls.1.gz
+$ man -k '^sort$'  sort (1) - sort lines of text files
+$ man -w 5 passwd  /usr/share/man/man5/passwd.5.gz
+```
+
+### Interview answers
+- **Shell vs environment variable?** "A shell variable exists only in the current shell; `export` makes it an environment variable, which child processes inherit."
+- **How does the shell find `ls`?** "It searches the directories in `$PATH` left to right and runs the first match. `type -a` or `which` shows where."
+- **A script works for you but cron says 'command not found'. Why?** "cron runs with a minimal PATH. Use full paths or set PATH in the job." (Chapter 7)
+- **How do you exit vi?** `Esc` then `:wq` to save, `:q!` to discard.
+- **Where's the documentation for /etc/passwd's format?** `man 5 passwd`.
+
+### Lesson 3 quiz: first attempt (retry Q2, Q3, Q5 tomorrow)
+- ✅ Q4: quit vi without saving = `Esc` `:q!` Enter
+- ⚠️ Q1: hidden files start with `.`, shown with **`ls -a`**. They're usually **settings files**, hidden only to keep `ls` tidy (not because they're "system files").
+- 🔁 Q2: shell variable = private to this shell; **`export`** makes it an environment variable, which **child processes inherit**. (Shell var = आफ्नो मात्र; export पछि बच्चा process लाई पनि पुग्छ।)
+- 🔁 Q3: the shell searches the folders in **`$PATH`, left to right**, and runs the **first match**. (PATH का folder बायाँबाट दायाँ खोज्छ।)
+- 🔁 Q5: `man passwd` = the passwd **command** (section 1); **`man 5 passwd`** = the **`/etc/passwd` file** format (section 5).
+- vi lab: wrote `~/lab/ch02/vi-test.txt` ✅. Pressing `Ctrl-C` in vi doesn't quit: Vim shows a hint (`Type :qa! ...`). Use `Esc` then a `:` command.
