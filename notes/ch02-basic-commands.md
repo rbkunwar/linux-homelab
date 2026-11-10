@@ -138,3 +138,158 @@ Same instant, 11 hours apart on paper. Servers are usually kept on **UTC** so lo
 ### Lesson 1 quiz: what I got wrong at first
 - **Rename** `a.txt` → `b.txt`: I wrote `cp a.txt b.txt`. That **copies** (now 2 files). Rename = **`mv a.txt b.txt`** (the old name disappears). Trick: renaming = moving to a new name.
 - Retry typo: `mv sraft.txt final.txt` → would fail with `No such file or directory`. **Use Tab completion:** type `mv dr` + **Tab** and the shell fills in `draft.txt`, so no typos (Section 2.11).
+
+---
+
+## Lesson 2: Navigating and intermediate commands (2.4–2.5, PDF p.42–48)
+
+### 2.4 Paths
+- The hierarchy starts at **`/` = the root directory**. The separator is `/` (not `\` like Windows).
+- **Absolute path** = starts with `/`, e.g. `/usr/lib`. Works from anywhere.
+- **Relative path** = doesn't start with `/`; relative to where you are now. Used most of the time.
+- **`..`** = parent directory. In `/usr/lib`, `..` = `/usr` and `../bin` = `/usr/bin`.
+- **`.`** = current directory. `./X11` = `X11` (most commands default to the current dir anyway).
+- **`~`** = home directory (`/home/rabindrakunwar` on the Pi, `/home/ubuntu` on the VM).
+
+My Day-1 mistake explained: `cd /linux-project` is absolute (looks for `/linux-project` at the disk root). Should be `cd ~/linux-project` or, from home, `cd linux-project`.
+
+#### 2.4.1 cd
+- **Current working directory** = the directory a process is "in". Each process has its own.
+- `cd dir` changes it. `cd` alone → home.
+- **`cd` is a shell built-in**, not a program. If it were a separate program (fork + exec), it would change **its own** directory and then exit, and the shell would stay put. A child can't change its parent's directory.
+```
+$ type cd                ← Pi and VM
+cd is a shell builtin
+$ type ls
+ls is /usr/bin/ls        ← a real program on disk
+```
+
+#### 2.4.2–2.4.3 mkdir, rmdir, rm -r
+- `mkdir dir` creates (`-p` = create parents too, no error if it exists).
+- `rmdir dir` removes **only if empty**.
+- `rm -r dir` removes recursively. ⚠️ **Never combine `-r` with globs like `*`**, and double-check before running, especially as root.
+
+#### 2.4.4 Globbing (wildcards)
+- The **shell** matches patterns against filenames and **replaces** the pattern with the matching names **before** running the command. This is called **expansion**.
+- `*` = any number of characters (including none). `at*` starts with "at", `*at` ends with "at", `*at*` contains "at".
+- `?` = exactly one character. `b?at` → `boat`, `brat`.
+- **No match → no expansion**: the literal text is passed on.
+- `'*'` in **single quotes** = don't expand. Needed for `grep` and `find` patterns.
+- ⚠️ Windows habit `*.*` only matches names **containing a dot**. Use `*` for "all files".
+- Globs don't match **dot files** (2.7).
+
+```
+$ echo /etc/host*                       ← Pi and VM
+/etc/host.conf /etc/hostname /etc/hosts /etc/hosts.allow /etc/hosts.deny
+$ echo /etc/*.conf | wc -w
+33 (Pi)  35 (VM)                        ← number of .conf files in /etc
+$ echo *dfkdsafh
+*dfkdsafh                               ← no match: printed literally
+$ echo '*'
+*                                       ← quoted: not expanded
+```
+
+### 2.5 Intermediate commands
+
+#### grep: print lines that match
+| Usage | Does |
+|---|---|
+| `grep root /etc/passwd` | lines containing "root" |
+| `grep root /etc/*` | search many files; prints the **filename** too |
+| `grep -i` | ignore case |
+| `grep -v` | **invert**: lines that do NOT match |
+| `grep -c` | count matching lines |
+| `grep -E` (= `egrep`) | extended regular expressions |
+
+Regular expressions (more powerful than globs, different syntax):
+- `.` = exactly one character
+- `.*` = any number of characters, including none (like glob `*`)
+- `.+` = one or more characters
+
+```
+$ grep root /etc/passwd
+Pi:  root:x:0:0:root:/root:/bin/bash
+     nm-openvpn:x:982:982:NetworkManager OpenVPN:/var/lib/openvpn/chroot:/usr/sbin/nologin   ← "root" inside "chroot"!
+VM:  root:x:0:0:root:/root:/bin/bash
+     snapd-range-524288-root:x:524288:...                                                    ← "root" inside a name
+```
+grep matches text **anywhere** in the line, not whole words (use `grep -w root` for whole words).
+
+```
+$ grep -c nologin /etc/passwd     → Pi 42, VM 31   (accounts that can't log in: system users)
+$ grep -vc nologin /etc/passwd    → Pi 8,  VM 12   (accounts that CAN have a shell, or use /bin/false etc.)
+```
+
+#### 🔐 Real-world grep: who is attacking my VM? (security log `/var/log/auth.log`)
+I can read it without sudo because I'm in group **`adm`** (Chapter 1 groups in action).
+```
+$ grep -c 'Accepted' /var/log/auth.log                         → Pi 269, VM 61    (successful logins)
+$ grep -cE 'Failed password|Invalid user' /var/log/auth.log    → Pi 0,   VM 847   (failed attempts)
+
+$ grep -oE 'Invalid user [^ ]+' /var/log/auth.log | awk '{print $3}' | sort | uniq -c | sort -rn | head -5
+    327 admin
+    140 user
+    124 user2
+     13 test
+     13 deploy
+```
+- The VM is on the **public internet**, so bots from **61 different IPs** tried usernames like `admin` and `test` in about 2.5 days (since the log rotated on Nov 8). The Pi is only on my home network, so it has 0.
+- They all failed: the VM has `passwordauthentication no` (keys only), so password guessing **can't work**. All 62 successful VM logins were mine, by key.
+- Hardening ideas for trading-infra-lab pillar 1: `PermitRootLogin no` (currently `without-password`), fail2ban, firewall review (ufw is active).
+- Logs **rotate**: `auth.log` (current), `auth.log.1` (last week), `auth.log.2.gz` ... (older, compressed). Section 2.18 + Chapter 7.
+
+#### less: page through big output
+- `less file` · **Space** = next page · **b** = back · **q** = quit
+- `/word` search forward · `?word` search backward · **n** = next match
+- Pipe output into it: `grep ie /usr/share/dict/words | less` (pipes `|`: Section 2.14)
+- `less` is the improved version of the older `more`.
+
+#### pwd: print working directory
+- Needed when the prompt doesn't show the path, and with **symbolic links**:
+```
+$ cd /bin; pwd; pwd -P        ← Pi and VM
+/bin
+/usr/bin                      ← -P shows the REAL path: /bin is a symlink to /usr/bin
+```
+
+#### diff: differences between text files
+- `diff file1 file2`. `diff -u` = "unified" format, preferred for sending to others and for tools (it's what Git shows).
+
+#### file: guess a file's type
+```
+$ file /usr/bin/ls /etc/passwd /bin/sh /etc
+Pi: /usr/bin/ls: symbolic link to ../lib/cargo/bin/coreutils/ls     ← Rust coreutils (same as cat)
+VM: /usr/bin/ls: ELF 64-bit LSB pie executable, x86-64, ...        ← classic compiled program
+    /etc/passwd: ASCII text
+    /bin/sh:     symbolic link to dash
+    /etc:        directory
+```
+
+#### find and locate
+- `find dir -name file -print` searches **live** (slow on big trees, but always current).
+- Quote patterns: `find /etc -name '*.service'` (otherwise the **shell** expands `*` first).
+- Don't use fancy options like `-exec` until the basic form is second nature.
+- `locate` searches a **prebuilt index**: very fast, but misses files newer than the index. **Not installed on either of my machines.**
+```
+$ find /etc -name hostname -print 2>/dev/null
+Pi: /etc/apparmor.d/hostname   /etc/hostname
+VM: /etc/hostname
+$ find /etc -name '*.service' 2>/dev/null | wc -l   → Pi 100, VM 80
+```
+(`2>/dev/null` throws away "Permission denied" errors into the black hole. Lesson 4.)
+
+#### head and tail
+- `head file` = first 10 lines · `tail file` = last 10 lines · `head -5` / `tail -5` = 5 lines
+- `tail -n +48 file` = from line 48 to the end (the book writes `tail +n`; modern tail wants `-n +n`)
+- `tail -f logfile` = **follow** a log live as new lines arrive (`Ctrl-c` to stop). Used constantly at work.
+
+#### sort
+- Alphanumeric order by default. `-n` = numeric order, `-r` = reverse.
+- Classic combo: `sort | uniq -c | sort -rn` = count duplicates, biggest first (used above for attackers).
+
+### Interview answers
+- **Absolute vs relative path?** "Absolute starts at `/` and works from anywhere; relative is from the current directory and can use `.` and `..`."
+- **Why is `cd` a built-in?** "A separate program would run as a child process and could only change its own directory, not the shell's."
+- **Who expands `*`?** "The shell, before the command runs. The command only sees the list of filenames, which is why you quote patterns for `find` and `grep`."
+- **How do you find failed SSH logins?** `grep -E 'Failed password|Invalid user' /var/log/auth.log` (or `journalctl -u ssh`), then count by user/IP with `sort | uniq -c | sort -rn`.
+- **How do you watch a log live?** `tail -f /var/log/syslog`.
