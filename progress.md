@@ -24,9 +24,9 @@ Book p.1 (PDF p.27) · Priority: Core
 ## Chapter 2: Basic Commands and Directory Hierarchy
 Book p.11 (PDF p.37) · Priority: Core
 
-- [ ] 2.1 The Bourne Shell: /bin/sh
-- [ ] 2.2 Using the Shell
-- [ ] 2.3 Basic Commands
+- [x] 2.1 The Bourne Shell: /bin/sh
+- [x] 2.2 Using the Shell
+- [x] 2.3 Basic Commands
 - [ ] 2.4 Navigating Directories
 - [ ] 2.5 Intermediate Commands
 - [ ] 2.6 Changing Your Password and Shell
@@ -268,3 +268,4 @@ The book explains how Linux works but skips some day-to-day job skills. We'll co
 | 2026-11-08 | Ch1 Lesson 1: abstraction, 3 layers, kernel vs user mode, kernel threads, main memory/state/image. Quiz passed | Notes: notes/ch01-big-picture.md. Learned: top/q/Ctrl-c, ps columns, paths (./ vs ~ vs /) |
 | 2026-11-08 | Ch1 Lesson 2: kernel jobs, context switch, virtual memory/MMU/page table, drivers, syscalls fork+exec (watched with strace), pseudodevices. Quiz passed | Fixed: Q4 (fork then exec, not what ls does); Q3 re-explained with the hotel |
 | 2026-11-09 | Ch1 Lesson 3: user space layers (Figure 1-3 on Pi vs VM), users/UIDs, root (UID 0, still user mode), groups, least privilege; system calls re-explained with cat traces. Quiz passed | Fixed: Q3 least privilege limits damage (not about user mode); Q4 groups = shared file access. Learned: always read the prompt (rebooted VM dropped SSH) |
+| 2026-11-10 | Ch1 summary + MMU/page tables deep dive. Ch2 Lesson 1: shell (bash; /bin/sh -> dash on Ubuntu), $ vs #, stdin/stdout, Ctrl-D vs Ctrl-C, ls/cp/mv/touch/rm/echo, rm vs rmdir vs rm -r, time zones (Pi AEDT vs VM UTC). Quiz passed | Fixed: rename = mv, not cp. Tip: Tab completion avoids typos. Project repo trading-infra-lab created |

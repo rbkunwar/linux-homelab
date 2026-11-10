@@ -134,3 +134,7 @@ Same instant, 11 hours apart on paper. Servers are usually kept on **UTC** so lo
 - **stdin/stdout/stderr?** "The three standard streams every process gets: file descriptors 0, 1 and 2. By default they're connected to the terminal, but they can be redirected to files or piped to other processes."
 - **Ctrl-C vs Ctrl-D?** "Ctrl-C interrupts/kills the running program; Ctrl-D sends end-of-file to say there's no more input."
 - **How do you rename a file?** `mv old new`. There's no separate rename command for this.
+
+### Lesson 1 quiz: what I got wrong at first
+- **Rename** `a.txt` → `b.txt`: I wrote `cp a.txt b.txt`. That **copies** (now 2 files). Rename = **`mv a.txt b.txt`** (the old name disappears). Trick: renaming = moving to a new name.
+- Retry typo: `mv sraft.txt final.txt` → would fail with `No such file or directory`. **Use Tab completion:** type `mv dr` + **Tab** and the shell fills in `draft.txt`, so no typos (Section 2.11).
