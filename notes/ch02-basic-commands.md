@@ -553,3 +553,147 @@ $ man -w 5 passwd  /usr/share/man/man5/passwd.5.gz
 - 🔁 Q3: the shell searches the folders in **`$PATH`, left to right**, and runs the **first match**. (PATH का folder बायाँबाट दायाँ खोज्छ।)
 - 🔁 Q5: `man passwd` = the passwd **command** (section 1); **`man 5 passwd`** = the **`/etc/passwd` file** format (section 5).
 - vi lab: wrote `~/lab/ch02/vi-test.txt` ✅. Pressing `Ctrl-C` in vi doesn't quit: Vim shows a hint (`Type :qa! ...`). Use `Esc` then a `:` command.
+
+### Q: why did my two terminals disappear? (2026-11-11)
+- `exit` in the VM pane (00:12) closed that pane; `exit` in the Pi pane (08:48) closed the last one.
+- **When the last pane closes, the tmux session ends.** The Pi itself was fine (up 3 days).
+- Evidence: `tmux ls` → `no server running`; journal: `tmux-spawn-....scope: Consumed ... over 3d 8h 58min`; last line of `~/.bash_history` = `exit`.
+- Fix: `~/linux-project/dual-terminal.sh` starts a fresh session.
+
+| To... | Do | Session afterwards |
+|---|---|---|
+| step away, keep everything | `Ctrl-b` then `d` (detach) | ✅ keeps running |
+| leave the VM only | `exit` in the VM pane → drops to a Pi shell (`ssh vm` to return) | ✅ |
+| close a pane for good | `exit` in its Pi shell | pane gone |
+| close everything | `exit` in every pane, or `./dual-terminal.sh stop` | ❌ ended |
+
+---
+
+## Lesson 4: Shell input/output and error messages (2.14–2.15, PDF p.54–58)
+
+### 2.14 Redirection: sending output somewhere other than the screen
+| Syntax | Does |
+|---|---|
+| `cmd > file` | stdout → file. **Creates** it, or **erases (clobbers)** it first if it exists ⚠️ |
+| `cmd >> file` | stdout → **appends** to the end of file |
+| `cmd1 \| cmd2` | **pipe**: stdout of cmd1 → stdin of cmd2. Chain as many as you like |
+| `cmd 2> file` | **stderr** (stream 2) → file |
+| `cmd > f 2>&1` | stdout → f, then stderr → **wherever stdout goes** (also f) |
+| `cmd < file` | file → stdin of cmd (rarely needed: most commands take a filename) |
+| `set -C` | bash "noclobber": `>` refuses to overwrite existing files |
+
+**Real, both machines:**
+```
+$ echo "BTC 97000" > prices.txt
+$ echo "ETH 3400"  > prices.txt     ← > ERASED the BTC line!
+$ cat prices.txt
+ETH 3400
+$ echo "BTC 97000" >> prices.txt    ← >> appends
+$ cat prices.txt
+ETH 3400
+BTC 97000
+
+$ set -C; echo x > prices.txt
+bash: prices.txt: cannot overwrite existing file      ← noclobber protects it
+```
+
+**Pipe, the same command on two CPUs:**
+```
+$ head -3 /proc/cpuinfo | tr a-z A-Z       (tr a-z A-Z = lowercase → UPPERCASE)
+Pi:  PROCESSOR : 0 · BOGOMIPS : 108.00 · FEATURES : FP ASIMD ...      ← ARM
+VM:  PROCESSOR : 0 · VENDOR_ID : AUTHENTICAMD · CPU FAMILY : 23     ← AMD EPYC (x86)
+```
+
+#### 2.14.1 Standard error
+- **stderr** = a separate output stream (ID **2**) for errors/diagnostics, so errors still reach the screen even when stdout is redirected.
+- Stream IDs: **0 = stdin, 1 = stdout (the default for `>`), 2 = stderr**.
+```
+$ ls /fffffffff > f
+ls: cannot access '/fffffffff': No such file or directory   ← still on screen (stderr)
+f has 0 bytes                                               ← nothing went to stdout
+
+$ ls /fffffffff > f 2> e         → error saved in e
+$ ls /fffffffff /etc/hostname > f 2>&1
+$ cat f                          → BOTH the error AND "/etc/hostname"
+```
+- ⭐ **`2>/dev/null`** = send errors into the black hole (Chapter 1 pseudodevice). Used earlier: `find /etc -name '*.service' 2>/dev/null` hid the "Permission denied" noise.
+- ⚠️ Order matters: `> f 2>&1` (both to f) ✅ vs `2>&1 > f` (stderr still on screen). Read `2>&1` as "stderr → wherever stdout points **right now**".
+
+#### 2.14.2 Standard input redirection
+```
+$ head -2 < /proc/cpuinfo        same as: head -2 /proc/cpuinfo
+```
+
+### 2.15 Understanding error messages
+**Always read the error message.** Unix errors usually say exactly what went wrong.
+
+#### 2.15.1 Anatomy
+```
+ls: cannot access '/dsafsda': No such file or directory
+│                  │          └ the problem
+│                  └ the file/path involved
+└ the program that complained
+```
+- "ls tried to open /dsafsda but couldn't because it doesn't exist."
+- ⭐ **Fix the FIRST error first.** Later errors are often consequences of the first (e.g. a missing config file, then 50 other complaints).
+- **Warning ≠ error:** warnings contain the word *warning*; the program tries to keep going.
+
+#### 2.15.2 Common errors (most come straight from kernel system calls)
+| Error | Meaning | Real trigger (both machines) |
+|---|---|---|
+| **No such file or directory** (`ENOENT`) | the #1 error: the path doesn't exist | `cat /nope` |
+| **File exists** | creating something that's already there | `mkdir a` when file `a` exists |
+| **Not a directory** / **Is a directory** | using a file as a dir, or a dir as a file | `touch a/b` when `a` is a file; `rm reports` |
+| **No space left on device** | disk full | (Pi: 12G free of 28G, VM: 36G of 49G) |
+| **Permission denied** | not allowed to read/write, or no execute bit | `cat /etc/shadow`; `./s.sh` without `chmod +x` |
+| **Operation not permitted** | usually killing a process you don't own | `kill 1` (PID 1 = systemd, owned by root) |
+| **Segmentation fault** / **Bus error** | program touched memory it wasn't allowed to (a program bug, bad input, rarely bad RAM). The kernel kills it | exit code **139** = 128 + signal 11 (SIGSEGV) |
+
+**The kernel's error code, seen with strace (VM):**
+```
+openat(AT_FDCWD, "/nope", O_RDONLY) = -1 ENOENT (No such file or directory)
+cat: /nope: No such file or directory
+```
+The system call returned `-1 ENOENT`, and `cat` turned it into the human message. (`man 2 open` lists every error `open()` can return.)
+
+**Same error, different wording on each machine** (the book says programs differ subtly):
+```
+Pi (Rust coreutils):  touch: setting times of 'a/b': Not a directory
+VM (GNU coreutils):   touch: cannot touch 'a/b': Not a directory
+Pi:  mkdir: a: File exists
+VM:  mkdir: cannot create directory 'a': File exists
+```
+The **last part** (the actual problem) is the same. Read the end of the message.
+
+**Segfault ↔ Chapter 1:** a segmentation fault is the **MMU + kernel** catching a process touching memory outside its page table → the kernel kills it.
+
+### Interview answers
+- **`>` vs `>>`?** "`>` overwrites (creates or truncates), `>>` appends."
+- **What does `2>&1` mean?** "Redirect stderr (2) to the same place as stdout (1). `cmd > log 2>&1` captures both in one file."
+- **What is `2>/dev/null`?** "Discard error messages."
+- **A service won't start and prints 40 errors. What do you do?** "Read the first error first; the rest are often consequences."
+- **Permission denied vs Operation not permitted?** "Permission denied = file access/execute rights; Operation not permitted = an action you lack privilege for, e.g. killing another user's process."
+- **What is a segfault?** "The process accessed memory it isn't allowed to; the MMU traps it and the kernel kills it with SIGSEGV (exit 139)."
+
+### Q: where is /etc/passwd? (2026-11-11)
+`/etc/passwd` = the **file** `passwd`, inside the **folder** `etc`, at the **root** `/` of the disk (absolute path).
+```
+/
+├── etc/          ← system configuration files (240 items on Pi, 211 on VM)
+│   ├── passwd    ← list of users (one line each: 50 Pi, 43 VM)
+│   └── group     ← list of groups
+└── home/rabindrakunwar/   ← ~
+```
+```
+$ ls -l /etc/passwd
+Pi: -rw-r--r-- 1 root root 2924 Aug 16 22:28 /etc/passwd    ← owned by root, readable by everyone
+VM: -rw-r--r-- 1 root root 2366 Sep  8 12:42 /etc/passwd
+$ file /etc/passwd → ASCII text
+```
+- Don't edit it by hand. Use commands like `useradd`/`usermod` (Chapter 7).
+- Real password hashes live in **`/etc/shadow`** (root-only), hence `cat /etc/shadow` → Permission denied.
+
+### Lesson 3 retry + Lesson 4 quiz ✅
+- Retries passed: child sees **environment** vars (made with `export`); shell searches **`$PATH` left to right**, first match wins; **`man 5 passwd`** = the file format.
+- Q4 in full: `ls /nope > out.txt` still prints the error because `>` only redirects **stdout (1)**; the error goes to **stderr (2)**, which still points at the screen.
+- Q6 fix: **Permission denied** = not allowed to **read, write, OR execute** (run) a file. Not just "make changes": `cat /etc/shadow` (read) and `./s.sh` without `+x` (execute) both gave it.

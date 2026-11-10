@@ -29,16 +29,16 @@ Book p.11 (PDF p.37) · Priority: Core
 - [x] 2.3 Basic Commands
 - [x] 2.4 Navigating Directories
 - [x] 2.5 Intermediate Commands
-- [ ] 2.6 Changing Your Password and Shell
-- [ ] 2.7 Dot Files
-- [ ] 2.8 Environment and Shell Variables
-- [ ] 2.9 The Command Path
-- [ ] 2.10 Special Characters
-- [ ] 2.11 Command-Line Editing
-- [ ] 2.12 Text Editors
-- [ ] 2.13 Getting Online Help
-- [ ] 2.14 Shell Input and Output
-- [ ] 2.15 Understanding Error Messages
+- [x] 2.6 Changing Your Password and Shell
+- [x] 2.7 Dot Files
+- [x] 2.8 Environment and Shell Variables
+- [x] 2.9 The Command Path
+- [x] 2.10 Special Characters
+- [x] 2.11 Command-Line Editing
+- [x] 2.12 Text Editors
+- [x] 2.13 Getting Online Help
+- [x] 2.14 Shell Input and Output
+- [x] 2.15 Understanding Error Messages
 - [ ] 2.16 Listing and Manipulating Processes
 - [ ] 2.17 File Modes and Permissions
 - [ ] 2.18 Archiving and Compressing Files
@@ -271,3 +271,4 @@ The book explains how Linux works but skips some day-to-day job skills. We'll co
 | 2026-11-10 | Ch1 summary + MMU/page tables deep dive. Ch2 Lesson 1: shell (bash; /bin/sh -> dash on Ubuntu), $ vs #, stdin/stdout, Ctrl-D vs Ctrl-C, ls/cp/mv/touch/rm/echo, rm vs rmdir vs rm -r, time zones (Pi AEDT vs VM UTC). Quiz passed | Fixed: rename = mv, not cp. Tip: Tab completion avoids typos. Project repo trading-infra-lab created |
 | 2026-11-10 | Ch2 Lesson 2: absolute/relative paths, . .. ~, cd is a built-in (fork), mkdir/rmdir/rm -r, globbing (shell expands first), grep -i -v -c -w, less, pwd -P, diff -u, file, find/locate, head/tail -f, sort. Found 847 SSH attacks on the VM (blocked: keys only). First own Git commit! grep re-explained in Nepali. Quiz passed | Fixed: shell (not ls) expands *; grep -v nologin /etc/passwd (typos); cd .. needs a space |
 | 2026-11-10 | Ch2 Lesson 3 (in progress): passwd/chsh, dot files, shell vs env vars (export), PATH, special chars, Ctrl shortcuts, vi survival kit (first file saved), man sections. Also: GID explained | Quiz: Q1 & Q4 ok; **retry Q2 (export), Q3 (PATH), Q5 (man 5 passwd) next session** before ticking 2.6–2.13 |
+| 2026-11-11 | Ch2 Lesson 3 retry passed (export, PATH, man 5 passwd). Lesson 4: > >> \| 2> 2>&1 < /dev/null, set -C, error anatomy, fix the first error first, 7 common errors (reproduced on both), ENOENT via strace, segfault = exit 139. Quiz passed. Also: why tmux closed (exit in both panes), where /etc/passwd lives | Fixed: Permission denied covers read, write AND execute, not only making changes |
