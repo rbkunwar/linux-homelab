@@ -80,6 +80,30 @@ bin:x:2:2:bin:/bin:/usr/sbin/nologin
 | `rm` | delete a file. ⚠️ **No undo / recycle bin**, only backups | `rm file` |
 | `echo` | print its arguments | `echo Hello again.` |
 
+### Q: what does `rm reports` do on a directory? (tested on both nodes)
+```
+$ rm reports
+rm: cannot remove 'reports': Is a directory      ← refused; exit code 1 (error)
+
+$ rmdir reports                                  ← works only if the directory is EMPTY (exit code 0)
+
+$ rmdir reports        (with a file inside)
+rmdir: failed to remove 'reports': Directory not empty
+
+$ rm -r reports                                  ← -r = recursive: deletes the folder AND everything inside, silently
+```
+| Command | Deletes |
+|---|---|
+| `rm file` | a file |
+| `rmdir dir` | an **empty** directory (safe: refuses if anything is inside) |
+| `rm -r dir` | a directory **and all its contents**. ⚠️ No confirmation, no undo |
+| `rm -ri dir` | the same, but **asks before each file** (`-i` = interactive) |
+
+- Plain `rm` refuses directories on purpose, as a safety net.
+- ⚠️ `rm -rf` (`-f` = force, never ask) is the most dangerous command in Linux. Check the prompt (`hostname`) and the path (`pwd`) first.
+- Exit code: `0` = success, non-zero = error (echo `$?` right after a command to see it).
+- On the VM the error line appeared *after* "exit code: 1" in my test: errors go to **stderr** and normal output to **stdout**, two separate streams that can arrive out of order over SSH. Lesson 4.
+
 **Reading `ls -l`** (real, Pi):
 ```
 -rw-rw-r-- 1 rabindrakunwar rabindrakunwar    6 Nov 10 00:07 notes.txt
