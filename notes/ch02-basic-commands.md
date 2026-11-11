@@ -697,3 +697,301 @@ $ file /etc/passwd → ASCII text
 - Retries passed: child sees **environment** vars (made with `export`); shell searches **`$PATH` left to right**, first match wins; **`man 5 passwd`** = the file format.
 - Q4 in full: `ls /nope > out.txt` still prints the error because `>` only redirects **stdout (1)**; the error goes to **stderr (2)**, which still points at the screen.
 - Q6 fix: **Permission denied** = not allowed to **read, write, OR execute** (run) a file. Not just "make changes": `cat /etc/shadow` (read) and `./s.sh` without `+x` (execute) both gave it.
+
+### /dev/null explained again (2026-11-11)
+**`/dev/null` = a fake file (kernel pseudodevice) that swallows everything written to it and always reads as empty.** 🗑️ A bin that empties itself instantly.
+```
+$ echo "hello" > /dev/null     → nothing printed
+$ cat /dev/null | wc -c        → 0
+$ ls -l /dev/null              → crw-rw-rw- 1 root root 1, 3 ... (c = character device; everyone can write)
+```
+**Why use it: to hide noise.** Real, Pi:
+```
+$ find / -name passwd | wc -l              → 1,947 lines (mostly "Permission denied" errors)
+$ find / -name passwd 2>/dev/null          → only the 18 real results (/etc/passwd, /usr/bin/passwd, ...)
+```
+`2>/dev/null` = stream 2 (stderr) → the black hole. Normal output still shows.
+
+| Command | Hides |
+|---|---|
+| `cmd 2>/dev/null` | errors only |
+| `cmd >/dev/null` | normal output only |
+| `cmd >/dev/null 2>&1` | everything (common in scripts/cron) |
+
+⚠️ Don't hide errors while troubleshooting; they're clues. Only discard errors you know don't matter.
+
+---
+
+## Lesson 5: Listing and manipulating processes (2.16, PDF p.58–61)
+
+### Learn
+
+A **process** is a running program (Ch1). Every process has a **PID**, a unique number. When a process ends, the kernel can reuse its PID later.
+
+#### `ps`: list processes
+
+The default columns are **PID, TTY, TIME, CMD**:
+
+| Column | Meaning |
+|---|---|
+| PID | process ID |
+| TTY | terminal it's attached to (`pts/0` = an SSH/tmux terminal, `?` = no terminal, e.g. a daemon) |
+| STAT | state: **S** sleeping, **R** running, **T** stopped, **I** idle kernel thread, **D** uninterruptible sleep (usually waiting on disk), **Z** zombie |
+| TIME | **CPU time** used, not how long it has been alive (wall-clock time) |
+| COMMAND | the command line, which a process can change itself |
+
+STAT extra letters: `s` session leader, `l` multi-threaded, `<` high priority, `+` in the foreground of its terminal.
+
+**BSD-style options** (no dash), which the book uses:
+
+| Command | Shows |
+|---|---|
+| `ps x` | all **my** processes |
+| `ps ax` | **all** processes on the system |
+| `ps u` | add user, %CPU, %MEM, VSZ, RSS, START |
+| `ps w` | wide: full command lines |
+| `ps aux` / `ps auxw` | combined; the one everyone types |
+| `ps u $$` | just my current shell (`$$` = the shell's own PID) |
+
+Columns from `u`: **VSZ** is virtual memory size in KB; **RSS** is the real RAM in use in KB (resident set size).
+
+#### Signals and `kill`
+
+A **signal** is a message **from the kernel** to a process. `kill` asks the kernel to send one. Despite the name, `kill` doesn't always kill.
+
+| Signal | No. | Sent by | Effect | Can it be ignored? |
+|---|---|---|---|---|
+| TERM | 15 | `kill pid` (the default) | "please exit": the process can clean up | yes |
+| INT | 2 | **Ctrl-C** | interrupt | yes |
+| KILL | 9 | `kill -9` / `kill -KILL` | kernel removes it immediately, no cleanup | **no** |
+| STOP | 19 | `kill -STOP` | freeze (still in memory) | **no** |
+| TSTP | 20 | **Ctrl-Z** | polite stop from the terminal | yes |
+| CONT | 18 | `kill -CONT`, `fg`, `bg` | continue after a stop | n/a |
+| HUP | 1 | terminal closed / `kill -HUP` | hang-up; many daemons use it to mean "reload config" | yes |
+
+`kill -l` lists every signal with its number.
+
+**Order to try:** `kill pid` (TERM) → wait a few seconds → only then `kill -9 pid`. KILL gives no chance to flush files, remove lock files or close connections. For a trading feed handler, that can mean a half-written file or a stale lock.
+
+**Exit status after a signal = 128 + signal number**, so you can tell *how* something died:
+- TERM: 128 + 15 = **143**
+- KILL: 128 + 9 = **137** (also what you see when the OOM killer strikes)
+- INT: 128 + 2 = **130**
+- SEGV: 128 + 11 = **139** (from Lesson 4)
+
+#### Job control
+
+Job control is the shell's way of sending TSTP/CONT with keys:
+
+| Key/command | Does |
+|---|---|
+| `Ctrl-Z` | suspend the foreground job (TSTP) |
+| `jobs` | list this shell's jobs (`[1]+ Stopped ...`) |
+| `fg` / `fg %1` | bring job 1 back to the foreground |
+| `bg` / `bg %1` | let a stopped job continue in the background |
+| `kill %1` | signal job 1 by job number instead of PID |
+
+⚠️ The common beginner trap is pressing **Ctrl-Z instead of Ctrl-C**. The program isn't gone, only stopped. Run `jobs` to check.
+
+#### Background processes: `&`
+
+`command &` starts the command in the background, prints `[job] PID` and gives the prompt back at once.
+
+Problems with background jobs:
+- If it reads stdin, it freezes; use `fg` to bring it back.
+- If it writes output, the text lands in the middle of your screen. Redirect it: `cmd > out.log 2>&1 &`.
+- **Ctrl-L** redraws a messy screen. **Ctrl-R** at the bash prompt is reverse search; press Esc to leave.
+- Over SSH, a job can die when you log out (HUP). `nohup cmd &` or **tmux** keeps it alive. That's why we use tmux.
+
+### Lab: real output
+
+#### `ps` with no options: Pi vs VM
+
+Run from Claude's shell, which has **no terminal**, so TTY is `?` everywhere. In your tmux pane you'll see `pts/N` instead.
+
+Pi:
+```
+    PID TTY          TIME CMD
+   1945 ?        00:01:15 python3          <- tv-webhook on the Pi (localhost:8800)
+  22093 ?        00:00:01 systemd          <- my per-user systemd
+ 963816 ?        00:00:01 tmux: server     <- the dual-terminal tmux session
+1092736 ?        00:00:00 bash
+1092737 ?        00:00:00 ps               <- ps sees itself
+```
+VM:
+```
+    PID TTY          TIME CMD
+    968 ?        00:12:31 python3          <- 12.5 min of CPU since Nov 8
+ 338731 ?        00:00:00 systemd
+ 424495 ?        00:00:00 bash
+ 424496 ?        00:00:00 ps
+```
+Notice that the Pi's PIDs are above **1 million** while the VM's are ~424k. PIDs only grow until they wrap around, so a big PID means many processes have been started since boot.
+
+#### `ps aux`: the top of the list (Pi)
+```
+USER   PID %CPU %MEM   VSZ   RSS TTY STAT START  TIME COMMAND
+root     1  0.0  0.4 27884 18280 ?   Ss   Nov07  3:18 /usr/lib/systemd/systemd ...
+root     2  0.0  0.0     0     0 ?   S    Nov07  0:56 [kthreadd]
+root     4  0.0  0.0     0     0 ?   I<   Nov07  0:00 [kworker/R-rcu_gp]
+```
+- **PID 1 = systemd**, the first user-space process (Ch6).
+- **PID 2 = kthreadd**, the parent of all kernel threads. Names in **[brackets]** are kernel threads (Ch1), with VSZ/RSS of 0 because they have no user-space memory.
+
+#### Count processes by state
+```bash
+ps aux | wc -l                                    # Pi: 200 lines   VM: 141 lines (minus 1 header)
+ps ax -o stat= | cut -c1 | sort | uniq -c | sort -rn
+```
+| State | Pi | VM |
+|---|---|---|
+| S sleeping | 128 | 86 |
+| I idle kernel threads | 73 | 56 |
+| R running | 1 | 1 |
+
+Almost everything is **sleeping** (waiting for input, a timer or the network). The only R is `ps` itself. A healthy box looks like this. Lots of **D** would point to a disk problem; lots of **Z** to a buggy parent process.
+
+#### Who eats the VM's RAM? (`ps aux --sort=-%mem`)
+```
+USER     PID   %CPU %MEM    VSZ    RSS  COMMAND
+netdata  392831 1.8 10.6 743560 104180 /usr/sbin/netdata ...
+root     364    0.0  8.9 177508  87264 /usr/lib/systemd/systemd-journald
+netdata  393447 0.2  8.4 1535012 82588 .../go.d.plugin 1
+```
+On a 954 MB VM, **netdata uses ~19% of RAM** (10.6 + 8.4). That's worth remembering for the monitoring pillar of trading-infra-lab. Note VSZ (1.5 GB) ≫ RSS (82 MB): virtual memory is mostly reserved, not used (Ch1, virtual memory).
+
+#### Signals demo: STOP → CONT → TERM (same result on Pi and VM)
+```bash
+sleep 300 &  P=$!          # $! = PID of the last background job
+ps -o pid,stat,cmd -p $P   # S  = sleeping
+kill -STOP $P              # T  = stopped (frozen)
+kill -CONT $P              # S  = back to normal
+kill $P; wait $P; echo $?  # TERM
+```
+Real Pi output:
+```
+1092752 S    sleep 300
+1092752 T    sleep 300      <- after STOP
+1092752 S    sleep 300      <- after CONT
+exit status after TERM: 143
+/bin/bash: line 7: 1092760 Killed      sleep 300
+exit status after KILL: 137
+exit status after INT: 130
+```
+The shell even prints **"Killed"** for signal 9. That's the same message you'd see if the OOM killer took a process.
+
+#### `kill -l` (identical on both, same Linux kernel)
+```
+ 1) SIGHUP   2) SIGINT   3) SIGQUIT  ...  9) SIGKILL ... 15) SIGTERM
+17) SIGCHLD 18) SIGCONT 19) SIGSTOP 20) SIGTSTP ...
+```
+
+### Interview angle
+- **"Difference between `kill` and `kill -9`?"** TERM (15) asks the process to exit and lets it clean up. KILL (9) is handled by the kernel, can't be caught, and allows no cleanup. Always try TERM first.
+- **"A process won't die even with `kill -9`?"** It's probably in **D state** (stuck in the kernel waiting on I/O, e.g. a dead NFS mount or disk), or it's a **zombie** (already dead; its parent must `wait()` for it, so fix or kill the parent).
+- **"A service exited with code 137. What happened?"** 128 + 9 means SIGKILL, very often the **OOM killer**. Check `dmesg` / `journalctl -k`.
+- **"How do you keep a job running after you log out?"** `tmux`/`screen`, `nohup`, or better, make it a **systemd service** (Ch6).
+- **"How do you make a daemon reload its config without a restart?"** Many daemons (nginx, sshd) reload on **HUP**: `kill -HUP pid`, or `systemctl reload`.
+- **"Find the top memory users"**: `ps aux --sort=-%mem | head`.
+
+### Q1 explained again: "I ran `kill` and the process is still alive" (2026-11-11)
+
+**Analogy: closing time at a shop**
+- `kill pid` (TERM, 15) = the manager says *"We're closing, please finish up and leave."* A polite customer packs their bag and leaves. A rude one ignores it.
+- `kill -9 pid` (KILL, 9) = **security carries them out**. No asking, no packing up, and it can't be refused. But whatever they were holding gets dropped on the floor.
+
+**So the answer to Q1:**
+1. `kill 4321` sent TERM, and the process ignored it or got stuck while cleaning up.
+2. Wait a few seconds, check again with `ps -p 4321`.
+3. Still there? Use `kill -9 4321`.
+4. **Why not `-9` first?** KILL gives the program **no chance to clean up**: unsaved data is lost, temp/lock files are left behind, network connections are cut. Always ask nicely first.
+
+**Real demo on the Pi: a "stubborn" process that ignores TERM**
+```bash
+bash -c 'trap "echo I got TERM but I am ignoring it" TERM; while true; do sleep 1; done' &
+P=$!
+kill $P            # polite
+ps -o pid,stat,cmd -p $P
+kill -9 $P         # forced
+ps -o pid,stat,cmd -p $P
+```
+`trap ... TERM` tells bash: "when TERM arrives, run this echo instead of exiting."
+```
+  [stubborn] I got TERM but I am ignoring it
+--- after kill (TERM):
+    PID STAT CMD
+1094992 S    bash -c trap ...     <- still alive!
+--- after kill -9 (exit 137):
+    PID STAT CMD
+  (gone)                          <- KILL can't be trapped
+```
+Exit status 137 = 128 + 9, which proves it was KILL.
+
+### Q2–Q5 explained simply (2026-11-11)
+
+**Q2: A service exits with status 137. What killed it?**
+- Rule: if a process is killed by a signal, exit status = **128 + signal number**.
+- 137 − 128 = **9**, which is **KILL**.
+- Who sends KILL without anyone typing `kill -9`? Usually the kernel's **OOM killer** (Out Of Memory): RAM ran out, so the kernel picked a process and killed it.
+- Cheat table: **130** = Ctrl-C (2), **137** = kill -9 (9), **139** = segfault (11), **143** = plain kill (15).
+
+**Q3: Pressed Ctrl-Z in vi by accident. Is vi gone?**
+- **No.** Ctrl-Z = **pause** (like the pause button on a video). Ctrl-C = **stop**.
+- vi is still in memory, frozen (state **T**).
+- `jobs` shows it: `[1]+  Stopped   vi file.txt`
+- `fg` brings it back exactly where you left it.
+
+**Q4: VSZ vs RSS in `ps aux`**
+- **VSZ** (virtual size) = memory the process has **reserved**, like a restaurant booking a table for 10.
+- **RSS** (resident set size) = memory **actually in RAM right now**, like the 3 people really sitting there.
+- RSS is the number that matters for "is RAM running out?".
+- Real VM example: go.d.plugin had VSZ **1,535,012 KB** (~1.5 GB) but RSS only **82,588 KB** (~82 MB).
+
+**Q5: `$$` and `$!`**
+- **`$$`** = the PID of **my current shell** (myself). `echo $$` shows it; `ps u $$` shows details about it.
+- **`$!`** = the PID of the **last thing I started in the background** with `&`.
+  ```bash
+  sleep 300 &     # shell prints [1] 1092752
+  echo $!         # 1092752
+  kill $!         # kill that sleep
+  ```
+
+### My own job-control run on the Pi, explained line by line (2026-11-11)
+
+```
+$ echo $$
+963817                          (1) PID of MY shell (the bash in the tmux Pi pane)
+$ sleep 300 &
+[1] 1097035                     (2) [1] = job number, 1097035 = PID
+$ echo $!
+1097035                         (3) $! = PID of last background job; matches (2)
+$ kill $!
+[1]+  Terminated   sleep 300    (4) TERM (15) sent; shell reports the job ended
+$ sleep 500
+^Z                              (5) Ctrl-Z = TSTP → paused, prompt comes back
+[1]+  Stopped      sleep 500
+$ jobs
+[1]+  Stopped      sleep 500    (6) still alive, frozen in memory (state T)
+$ fg
+sleep 500                       (7) fg prints the command, resumes it in front
+^C                              (8) Ctrl-C = INT (2) → stopped for real
+$ echo $?
+130                             (9) 128 + 2 = 130 → killed by Ctrl-C
+```
+
+Notes:
+- (1) `963817` is one more than the tmux server PID (963816): tmux started this bash right after itself.
+- (2)/(5) Both got job number `[1]` because job 1 had already finished in (4), so the number was free again.
+- `+` in `[1]+` = the "current" job, the one `fg`/`bg` use if you give no number.
+- (4) "Terminated" is the shell's word for TERM; with `kill -9` it would say "Killed".
+- Ctrl-Z = pause (job survives). Ctrl-C = stop (job ends, exit 130).
+
+### Lesson 5 quiz: my answers (2026-11-11)
+1. ✅ `kill -9 PID` if `kill` fails. **Missing part:** why not first? Because -9 gives no cleanup (unsaved data, lock files, open connections are lost).
+2. ✅ 137 = killed by signal 9 (128 + 9). **Add:** often the **OOM killer** when RAM runs out.
+3. ✅ Ctrl-Z pauses; `fg` brings it back.
+4. ✅ VSZ = memory reserved/asked for, RSS = memory actually in RAM.
+5. ⚠️ `$$` = my shell's PID ✅. But I mixed up two symbols:
+   - **`$!`** = PID of the last **background** job (`&`)
+   - **`$?`** = **exit status** of the last command (0 = success, 130 = Ctrl-C, ...)
+   - Memory trick: **`?`** = "how did it go?" (a question) · **`!`** = "the one I just launched!"

@@ -39,7 +39,7 @@ Book p.11 (PDF p.37) · Priority: Core
 - [x] 2.13 Getting Online Help
 - [x] 2.14 Shell Input and Output
 - [x] 2.15 Understanding Error Messages
-- [ ] 2.16 Listing and Manipulating Processes
+- [x] 2.16 Listing and Manipulating Processes
 - [ ] 2.17 File Modes and Permissions
 - [ ] 2.18 Archiving and Compressing Files
 - [ ] 2.19 Linux Directory Hierarchy Essentials
