@@ -995,3 +995,30 @@ Notes:
    - **`$!`** = PID of the last **background** job (`&`)
    - **`$?`** = **exit status** of the last command (0 = success, 130 = Ctrl-C, ...)
    - Memory trick: **`?`** = "how did it go?" (a question) · **`!`** = "the one I just launched!"
+
+### My VM experiment: "No such process" and "Operation not permitted" (2026-11-11)
+
+Real output from the VM (`ubuntu@bot-vnic`):
+```
+ubuntu   428107  0.0 0.4 11336 4460 pts/0  R+  12:26  0:00 ps aux    (A)
+[1]+  Killed                 sleep 500                                 (B)
+$ kill 428107
+-bash: kill: (428107) - No such process                                (C)
+$ kill 424161
+-bash: kill: (424161) - Operation not permitted                        (D)
+$ kill n-9 424161
+-bash: kill: n-9: arguments must be process or job IDs                 (E)
+-bash: kill: (424161) - Operation not permitted
+```
+
+- **(A)** The last line of `ps aux` is **ps itself**: `R+` = running, in the foreground (`+`) of my terminal `pts/0`. By the time I read it, ps had already finished.
+- **(B)** The shell reports a job change at the next prompt: my earlier `sleep 500` (job 1) died from signal 9, so it says **Killed** (TERM would say "Terminated").
+- **(C)** **No such process** (ESRCH): PID 428107 was the `ps aux` from (A). It ended the moment it printed its list. PIDs of finished processes are gone.
+- **(D)** **Operation not permitted** (EPERM): PID 424161 belongs to the user **netdata**, not to me (`ubuntu`). A normal user may only signal **their own** processes. This is least privilege (Ch1) working as designed. Only root can signal other users' processes.
+- **(E)** Typo: `n-9` instead of `-9`. kill took `n-9` as a PID or job, rejected it, then still tried 424161 and was refused again. Even a correct `kill -9` would fail: the problem is **permission**, not **signal strength**. KILL can't be ignored by the process, but the kernel still checks whether *you* are allowed to send it.
+
+Other things visible in the screenshot:
+- `[kworker/...]` in brackets, owner root, VSZ/RSS 0, STAT `I` = idle **kernel threads**.
+- netdata STAT `Sl` = sleeping + multi-threaded.
+
+⚠️ Lesson: don't kill processes you don't recognise, especially with `sudo`. 424161 is part of **netdata** (the VM's monitoring). Killing it would blind the monitoring: "shooting yourself in the foot", as the book says.
