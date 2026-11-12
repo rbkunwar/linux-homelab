@@ -1022,3 +1022,195 @@ Other things visible in the screenshot:
 - netdata STAT `Sl` = sleeping + multi-threaded.
 
 ⚠️ Lesson: don't kill processes you don't recognise, especially with `sudo`. 424161 is part of **netdata** (the VM's monitoring). Killing it would blind the monitoring: "shooting yourself in the foot", as the book says.
+
+---
+
+## Lesson 6: File modes and permissions (2.17, PDF p.61–64)
+
+### Learn
+
+`ls -l` shows the **mode** as the first 10 characters:
+
+```
+ -  rw-  r--  r--    1  root  root  2924  Aug 16  /etc/passwd
+ │  └┬┘  └┬┘  └┬┘       └┬─┘  └┬─┘
+type user group other   owner group
+```
+
+- **Type:** `-` regular file, `d` directory, `l` symbolic link (more types in 3.1).
+- **3 sets**, in this order: **u**ser (the owner), **g**roup, **o**ther (everyone else, also called "world").
+- Each set is `r` read, `w` write, `x` execute, or `-` not granted.
+- The kernel checks **only one** set: owner? use the user set. Else in the group? use the group set. Else: other.
+
+#### r, w, x mean different things for files and directories
+
+| | File | Directory |
+|---|---|---|
+| **r** | read the contents | **list** the names inside (`ls`) |
+| **w** | change the contents | create, delete, rename files inside |
+| **x** | run it as a program | **enter it / use files inside** (`cd`, open `dir/file`) |
+
+A directory needs **r + x** for normal use. The classic mistake: `chmod 644` on a directory removes x, and then nothing inside can be opened.
+
+#### chmod: symbolic form
+```bash
+chmod g+r file       # add read for group
+chmod go+r file      # group and other
+chmod go-r file      # remove
+chmod u+x script.sh  # make executable for me
+chmod a+x            # all = u, g and o
+```
+
+#### chmod: numbers (octal), "absolute" mode
+r = **4**, w = **2**, x = **1**; add them per set.
+
+| Mode | Meaning | Used for |
+|---|---|---|
+| **644** | rw- r-- r-- | normal files |
+| **600** | rw- --- --- | private files (SSH keys, configs with secrets) |
+| **755** | rwx r-x r-x | programs, public directories |
+| **700** | rwx --- --- | private directories |
+| **711** | rwx --x --x | dir others can pass through but not list |
+
+Example: 7 = 4+2+1 = rwx, 5 = 4+1 = r-x, 6 = 4+2 = rw-.
+
+#### Special bits
+- **setuid** (`s` where the user's x is): the program runs **as its owner**, not as you. `/usr/bin/passwd` is setuid root, so normal users can change their own password in `/etc/shadow`.
+- **sticky bit** (`t` at the end, e.g. `/tmp` = `drwxrwxrwt`): everyone can create files, but only the owner can delete their own.
+
+#### umask: default permissions for new files
+- New files start from 666, new directories from 777; umask **removes** bits.
+- `umask 022` → files 644, dirs 755 (others can read).
+- `umask 077` → files 600, dirs 700 (private).
+- `umask 002` (Ubuntu's default for normal users) → files **664**, dirs **775** (your private group can write).
+
+#### Symbolic links
+- `ln -s target linkname`: a name that **points to another path**, like a Windows shortcut.
+- Shows as `l` in ls: `link -> target`. Link permissions are always `rwxrwxrwx`; the target's permissions are what count.
+- The target doesn't have to exist, which gives a **broken link**: "No such file or directory" even though you can see the name.
+- ⚠️ **Order is target first, then link name.** Forgetting `-s` makes a **hard link** (Section 4.6); avoid for now.
+
+### Lab: real output (Pi vs VM)
+
+#### Who am I and what groups am I in?
+```
+Pi: uid=1000(rabindrakunwar) gid=1000(rabindrakunwar) groups=...,4(adm),27(sudo),...
+VM: uid=1001(ubuntu)         gid=1001(ubuntu)         groups=...,4(adm),27(sudo),...,120(lxd)
+umask: 0002 on both
+```
+Both users are in **sudo** (can become root) and **adm** (can read system logs).
+
+#### The famous files
+```
+-rw-r--r-- 1 root root   2924 /etc/passwd      <- everyone can read (user list)
+-rw-r----- 1 root shadow 1330 /etc/shadow      <- password hashes: only root + group shadow
+-r--r----- 1 root root   1800 /etc/sudoers     <- read-only even for root (edit with visudo)
+-rwsr-xr-x 1 root root 142552 /usr/bin/passwd  <- s = setuid root
+drwxrwxrwt 13 root root 12288 /tmp             <- t = sticky bit
+$ cat /etc/shadow
+cat: /etc/shadow: Permission denied            <- same on both machines
+```
+**Why passwd needs setuid:** I'm not allowed to write `/etc/shadow`, but I'm allowed to change my own password. The passwd program runs as root to do that one job safely.
+
+Setuid programs in /usr/bin: **Pi 11, VM 10** (chfn, chsh, gpasswd, mount, passwd, pkexec, su, sudo...). Attackers hunt for these, so security audits list them: `find /usr/bin -perm -4000`.
+
+#### SSH files: why 600 and 700
+```
+drwx------  ~/.ssh                   700: only me
+-rw-------  ~/.ssh/authorized_keys   600
+-rw-------  ~/.ssh/config            600
+-rw-------  ~/.ssh/pi_to_vm          600: PRIVATE key
+-rw-r--r--  ~/.ssh/pi_to_vm.pub      644: public key, fine to share
+```
+SSH **refuses** to use a private key that others can read ("UNPROTECTED PRIVATE KEY FILE!").
+
+#### New files with umask 002 → 664 / 775
+```
+-rw-rw-r--  f        (666 - 002 = 664)
+drwxrwxr-x  d        (777 - 002 = 775)
+```
+With `umask 077` in a subshell:
+```
+-rw-------  private  (600)
+drwx------  pdir     (700)
+```
+
+#### chmod in action
+```
+start:            -rw-rw-r--  (664)
+chmod go-r f   →  -rw--w----  <- group keeps its w! "-r" only removes r
+chmod u+x,g+r  →  -rwxrw----
+chmod 644 f    →  -rw-r--r--  <- absolute: sets everything at once
+stat -c '%a %A %n' f d  →  644 -rw-r--r-- f   /   775 drwxrwxr-x d
+```
+`stat -c '%a'` shows the number form: handy when you can't do octal in your head yet.
+
+#### Directory r vs x
+```
+chmod 644 d   →  drw-r--r--
+ls d          →  note                         <- r lets me LIST names
+cat d/note    →  cat: d/note: Permission denied   <- no x: can't open anything inside
+chmod 711 d   →  drwx--x--x
+cat d/note    →  secret                       <- x lets me in
+```
+
+#### A script without x
+```
+./s.sh                →  Permission denied
+chmod +x s.sh; ./s.sh →  hi from script
+```
+
+#### Symlinks on both systems
+```
+/bin  -> usr/bin        (Pi and VM: /bin is just a link, "usrmerge")
+/sbin -> usr/sbin
+/lib  -> usr/lib
+/bin/sh -> dash         (from Lesson 1: sh is really dash)
+readlink -f /bin/sh  →  /usr/bin/dash   (follow every link to the real file)
+
+ln -s note_missing broken;  cat broken  →  No such file or directory   <- broken link
+ln -s d/note link;          cat link    →  secret
+```
+
+#### 🔍 Finding: home directory permissions differ
+```
+Pi: drwxr-x---  /home/rabindrakunwar   (750: other users can't look in)
+VM: drwxr-xr-x  /home/ubuntu           (755: ANY user on the VM can list and read it)
+VM other homes: adminrabin, opc, rabin  drwxr-x--- (750)
+```
+On the VM, `/home/ubuntu` is world-readable, and the VM has 4 human-style accounts. That's a security-baseline item for trading-infra-lab (fix: `chmod 750 /home/ubuntu`, after review).
+
+### Interview angle
+- **"What does 755 mean? 644? 600?"** Know these instantly.
+- **"x on a directory?"** Permission to enter it and access files inside; r only lists names.
+- **"Why can a normal user change their password if /etc/shadow is root-only?"** passwd is **setuid root**.
+- **"What's the sticky bit on /tmp for?"** Everyone can write, but only the owner can delete their own files.
+- **"SSH says UNPROTECTED PRIVATE KEY FILE"**: `chmod 600 ~/.ssh/id_*`, `chmod 700 ~/.ssh`.
+- **"Never `chmod 777`"**: anyone on the box can change or replace it. Fix ownership/groups instead.
+- **"Symlink vs hard link?"** Symlink points to a **name** (can break, can cross filesystems); hard link is another name for the **same data** (Ch4).
+
+#### My own Lesson 6 lab run on the VM (2026-11-13)
+```
+ubuntu@bot-vnic:~$ cd ~/p<Tab><Tab>
+permlab/   portfolio_dashboard/            <- double Tab lists every match
+~/permlab$ touch f; mkdir d; ls -l
+drwxrwxr-x 2 ubuntu ubuntu 4096 d          <- 775 (umask 002)
+-rw-rw-r-- 1 ubuntu ubuntu    0 f          <- 664
+$ chmod 600 f  →  -rw-------               <- private
+$ chmod 755 f  →  -rwxr-xr-x  f (green)    <- executable; ls colours it green
+$ echo 'echo I run!' >s.sh; ./s.sh
+-bash: ./s.sh: Permission denied           <- no x bit
+$ chmod +x s.sh; ./s.sh
+I run!
+$ l -l /usr/bin/passwd /etc/shadow
+-rw-r----- 1 root shadow  1335 /etc/shadow
+-rwsr-xr-x 1 root root   64152 /usr/bin/passwd*   <- red background = setuid; * = executable
+$ ln -s /etc/hostname myhost; ls -l myhost; cat myhost
+lrwxrwxrwx 1 ubuntu ubuntu 13 myhost -> /etc/hostname
+bot-vnic
+```
+- `l` is an Ubuntu **alias** for `ls -CF` (also `ll` = `ls -alF`, `la` = `ls -A`). The `F` adds markers: `*` executable, `/` directory, `@` symlink. So `l -l` = `ls -CF -l`.
+- ls colours: blue = directory, green = executable, cyan/purple = symlink, **red background = setuid**: ls highlights it on purpose because setuid matters for security.
+- The symlink's size is **13** because a symlink only stores the path text: `/etc/hostname` is 13 characters.
+- `cat myhost` printed `bot-vnic`: reading the link actually read `/etc/hostname`, the machine's name.
+- Same results as the Pi, except the binary sizes (passwd: Pi 142,552 bytes on arm64, VM 64,152 bytes on x86_64; different builds).
