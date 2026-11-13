@@ -1214,3 +1214,10 @@ bot-vnic
 - The symlink's size is **13** because a symlink only stores the path text: `/etc/hostname` is 13 characters.
 - `cat myhost` printed `bot-vnic`: reading the link actually read `/etc/hostname`, the machine's name.
 - Same results as the Pi, except the binary sizes (passwd: Pi 142,552 bytes on arm64, VM 64,152 bytes on x86_64; different builds).
+
+### Lesson 6 quiz: my answers (2026-11-14)
+1. ✅ `-rw-r-----` = user read+write, group read, other nothing. **Number: 640** (6 = 4+2, 4, 0).
+2. ✅ `./backup.sh` → Permission denied because the x bit is missing. Fix: `chmod +x backup.sh`.
+3. ✅ A private SSH key with `-rw-r--r--` is a problem: anyone on the box can read it, and SSH refuses to use it. Should be `-rw-------` = **600**. (A mode is always exactly 10 characters.)
+4. ✅ `chmod 644` on a directory removes **x**. Wording fix: on a directory x doesn't mean "execute", it means **enter the directory and access the files inside**. With only r, I can list names but can't open anything.
+5. ✅ `passwd` is **setuid root** (`-rwsr-xr-x`): it runs as its owner (root), so it can write `/etc/shadow` for me.

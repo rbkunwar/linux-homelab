@@ -40,7 +40,7 @@ Book p.11 (PDF p.37) · Priority: Core
 - [x] 2.14 Shell Input and Output
 - [x] 2.15 Understanding Error Messages
 - [x] 2.16 Listing and Manipulating Processes
-- [ ] 2.17 File Modes and Permissions
+- [x] 2.17 File Modes and Permissions
 - [ ] 2.18 Archiving and Compressing Files
 - [ ] 2.19 Linux Directory Hierarchy Essentials
 - [ ] 2.20 Running Commands as the Superuser
@@ -273,3 +273,4 @@ The book explains how Linux works but skips some day-to-day job skills. We'll co
 | 2026-11-10 | Ch2 Lesson 3 (in progress): passwd/chsh, dot files, shell vs env vars (export), PATH, special chars, Ctrl shortcuts, vi survival kit (first file saved), man sections. Also: GID explained | Quiz: Q1 & Q4 ok; **retry Q2 (export), Q3 (PATH), Q5 (man 5 passwd) next session** before ticking 2.6–2.13 |
 | 2026-11-11 | Ch2 Lesson 3 retry passed (export, PATH, man 5 passwd). Lesson 4: > >> \| 2> 2>&1 < /dev/null, set -C, error anatomy, fix the first error first, 7 common errors (reproduced on both), ENOENT via strace, segfault = exit 139. Quiz passed. Also: why tmux closed (exit in both panes), where /etc/passwd lives | Fixed: Permission denied covers read, write AND execute, not only making changes |
 | 2026-11-11 | Ch2 Lesson 5: ps (x/ax/u/w, STAT S/R/T/D/Z/I), signals TERM/INT/KILL/STOP/CONT/HUP, kill -l, exit = 128+signal (130/137/143), job control Ctrl-Z/jobs/fg/bg, &, $$ vs $!. Own job-control run; kill errors on VM (No such process vs Operation not permitted). 13 real-world trading scenarios written; drills run on the Pi | Quiz 4.5/5 after re-explain. Fixed: $? = exit status, $! = last background PID; give the "why" for TERM before -9. **To do: run the scenario drills on the VM (bottom pane, ubuntu@bot-vnic)** |
+| 2026-11-12 to 11-14 | Ch2 Lesson 6: file modes (type + user/group/other), r/w/x on files vs directories, chmod symbolic + octal (644/600/755/700/711), setuid (passwd), sticky bit (/tmp), umask 002 vs 022/077, symbolic links (ln -s, broken links). Lab done on the VM by me. Quiz passed 5/5 with hints | Fixed: mode is exactly 10 characters; x on a directory = enter/access, not "execute"; quotes must match (" vs '). Finding: /home/ubuntu on the VM is 755 (world-readable). Learned: exit closes a pane, Ctrl-b d detaches; `l`/`ll` are aliases |
